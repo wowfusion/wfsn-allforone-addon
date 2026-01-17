@@ -1,14 +1,13 @@
 # AllforOne Addon Install Script
 # Copies the addon to your World of Warcraft AddOns folder
 
-# ============================================================
-# CONFIGURE YOUR WOW PATH HERE:
-# ============================================================
-$WoWPath = "C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns"
-# ============================================================
+param(
+    [string]$WoWPath = "D:\Programme\World of Warcraft\_retail_\Interface\AddOns",
+    [string]$SourcePath
+)
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AddonSource = Join-Path $ScriptDir "AllforOne"
+$AddonSource = if ($SourcePath) { Resolve-Path $SourcePath } else { Join-Path $ScriptDir "AllforOne" }
 $AddonDestination = Join-Path $WoWPath "AllforOne"
 
 # Check if WoW AddOns folder exists
@@ -32,7 +31,7 @@ if (Test-Path $AddonDestination) {
 
 # Copy addon to WoW folder
 Write-Host "Installing AllforOne addon..."
-Copy-Item -Path $AddonSource -Destination $AddonDestination -Recurse
+Copy-Item -Path $AddonSource -Destination $AddonDestination -Recurse -Force
 
 if (Test-Path $AddonDestination) {
     Write-Host "Successfully installed AllforOne to: $AddonDestination" -ForegroundColor Green
