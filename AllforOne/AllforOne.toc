@@ -1,0 +1,38 @@
+## Interface: 110207, 120000
+## Title: All for One
+## Notes: Guildfound Addon für WoW Retail - wowfusion.de
+## Notes-deDE: Guildfound Addon für WoW Retail - wowfusion.de
+## Author: wowfusion.de
+## Version: 1.0.1
+## SavedVariables: AllforOneDB
+## SavedVariablesPerCharacter: AllforOneCharDB
+## IconTexture: Interface\AddOns\AllforOne\media\icon-allforone.png
+
+## X-Website: https://wowfusion.de
+
+# Constants and Core
+Constants.lua
+Core.lua
+
+# UI Components
+interfaces\UIComponents.lua
+interfaces\Popup.lua
+
+# Modules
+Modules\GuildCheck.lua
+Modules\TradeBlock.lua
+Modules\GroupBlock.lua
+Modules\LFGBlock.lua
+Modules\AuctionBlock.lua
+Modules\MailBlock.lua
+Modules\CraftingOrderBlock.lua
+Modules\WarboundBlock.lua
+Modules\AdminPanel.lua
+Modules\WelcomeScreen.lua
+Modules\MinimapIcon.lua
+Modules\SecurityCheck.lua
+Modules\ChatFilter.lua
+Modules\TooltipEnhance.lua
+
+# Configuration
+Config.lua

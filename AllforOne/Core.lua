@@ -1,0 +1,728 @@
+----------------------------------------------------------------------
+--  All for One 1.0.0 - Guildfound Addon für WoW Retail
+--  wowfusion.de
+----------------------------------------------------------------------
+
+-- Create global addon namespace
+local addonName, BR = ...
+_G.AllforOne = BR
+
+-- Initialize databases
+_G.AllforOneDB = _G.AllforOneDB or {}
+_G.AllforOneCharDB = _G.AllforOneCharDB or {}
+
+-- Local references (Colors, Backdrops, etc. are defined in Constants.lua)
+BR.Modules = {}
+BR.Events = CreateFrame("Frame")
+
+----------------------------------------------------------------------
+--  Utility Functions
+----------------------------------------------------------------------
+
+function BR:Print(msg, msgType)
+    local color = self.Colors.White
+    if msgType == "error" then
+        color = self.Colors.Error
+    elseif msgType == "warning" then
+        color = self.Colors.Warning
+    elseif msgType == "info" then
+        color = self.Colors.White
+    end
+    DEFAULT_CHAT_FRAME:AddMessage(self.Colors.Gold .. "[All for One]|r " .. color .. msg .. "|r")
+end
+
+function BR:ShowScreenMessage(msg, msgType, duration)
+    duration = duration or 3
+    
+    -- Create screen message frame if it doesn't exist
+    if not self.ScreenMessageFrame then
+        local frame = CreateFrame("Frame", "AllforOneScreenMessage", UIParent, "BackdropTemplate")
+        frame:SetSize(400, 70)
+        frame:SetPoint("TOP", UIParent, "TOP", 0, -150)
+        frame:SetFrameStrata("FULLSCREEN_DIALOG")
+        frame:SetFrameLevel(500)
+        
+        -- Simple dark backdrop
+        frame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 14,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 }
+        })
+        frame:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        
+        -- Colored accent bar on left
+        local accentBar = frame:CreateTexture(nil, "ARTWORK")
+        accentBar:SetPoint("TOPLEFT", 6, -6)
+        accentBar:SetPoint("BOTTOMLEFT", 6, 6)
+        accentBar:SetWidth(4)
+        accentBar:SetColorTexture(1, 0.2, 0.2, 1)
+        frame.accentBar = accentBar
+        
+        -- Icon with simple mask
+        local iconBg = frame:CreateTexture(nil, "ARTWORK")
+        iconBg:SetSize(38, 38)
+        iconBg:SetPoint("LEFT", 18, 0)
+        iconBg:SetColorTexture(0, 0, 0, 0.5)
+        
+        local icon = frame:CreateTexture(nil, "ARTWORK", nil, 1)
+        icon:SetSize(32, 32)
+        icon:SetPoint("CENTER", iconBg, "CENTER", 0, 0)
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        frame.icon = icon
+        
+        -- Title
+        local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", iconBg, "TOPRIGHT", 12, -2)
+        frame.title = title
+        
+        -- Message text
+        local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        text:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+        text:SetPoint("RIGHT", frame, "RIGHT", -15, 0)
+        text:SetJustifyH("LEFT")
+        text:SetJustifyV("TOP")
+        frame.text = text
+        
+        -- Addon name at bottom right
+        local addonName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        addonName:SetPoint("BOTTOMRIGHT", -12, 8)
+        addonName:SetText("|cFF666666All for One|r")
+        frame.addonName = addonName
+        
+        frame:Hide()
+        self.ScreenMessageFrame = frame
+    end
+    
+    local frame = self.ScreenMessageFrame
+    
+    -- Set colors and icon based on message type
+    if msgType == "error" or msgType == "warning" then
+        frame:SetBackdropBorderColor(0.6, 0.1, 0.1, 1)
+        frame.accentBar:SetColorTexture(1, 0.2, 0.2, 1)
+        frame.title:SetText("|cFFFF4444BLOCKIERT|r")
+        frame.icon:SetTexture("Interface\\AddOns\\AllforOne\\media\\icon-allforone.png")
+        frame.text:SetTextColor(1, 0.85, 0.75)
+    elseif msgType == "info" then
+        frame:SetBackdropBorderColor(0.1, 0.3, 0.6, 1)
+        frame.accentBar:SetColorTexture(0.3, 0.6, 1, 1)
+        frame.title:SetText("|cFF66AAFFInformation|r")
+        frame.icon:SetTexture("Interface\\Icons\\INV_Misc_Note_06")
+        frame.text:SetTextColor(0.85, 0.9, 1)
+    else
+        frame:SetBackdropBorderColor(0.1, 0.5, 0.1, 1)
+        frame.accentBar:SetColorTexture(0.2, 0.8, 0.2, 1)
+        frame.title:SetText("|cFF44FF44Erfolgreich|r")
+        frame.icon:SetTexture("Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend")
+        frame.text:SetTextColor(0.85, 1, 0.85)
+    end
+    
+    frame.text:SetText(msg)
+    frame:Show()
+    
+    -- Animate fade out
+    if frame.fadeTimer then
+        frame.fadeTimer:Cancel()
+    end
+    
+    frame:SetAlpha(1)
+    frame.fadeTimer = C_Timer.NewTimer(duration, function()
+        -- Fade out animation
+        local fadeOut = frame:CreateAnimationGroup()
+        local alpha = fadeOut:CreateAnimation("Alpha")
+        alpha:SetFromAlpha(1)
+        alpha:SetToAlpha(0)
+        alpha:SetDuration(0.5)
+        fadeOut:SetScript("OnFinished", function()
+            frame:Hide()
+            frame:SetAlpha(1)
+        end)
+        fadeOut:Play()
+    end)
+end
+
+function BR:Notify(msg, msgType, duration)
+    -- Show chat message and screen message (popups handle their own sound)
+    self:Print(msg, msgType)
+    self:ShowScreenMessage(msg, msgType, duration)
+end
+
+function BR:Debug(msg)
+    if self:GetSetting("DebugMode") then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF888888[AfO Debug]|r " .. tostring(msg))
+    end
+end
+
+----------------------------------------------------------------------
+--  Settings Management
+----------------------------------------------------------------------
+
+function BR:GetSetting(key)
+    if AllforOneCharDB[key] ~= nil then
+        return AllforOneCharDB[key]
+    end
+    return AllforOneDB[key]
+end
+
+function BR:SetSetting(key, value, perCharacter)
+    if perCharacter then
+        AllforOneCharDB[key] = value
+    else
+        AllforOneDB[key] = value
+    end
+end
+
+function BR:InitializeDefaults()
+    local defaults = {
+        Enabled = true,
+        BlockTrade = true,
+        BlockGroupInvites = true,
+        BlockLFG = true,
+        BlockAuction = true,
+        BlockMail = true,
+        BlockCraftingOrders = true,
+        BlockWarbound = true,
+        MailBlockMode = "selective", -- "full" or "selective"
+        DebugMode = false,
+        MuteNotificationSounds = false,
+        ShowWelcomeOnLogin = true,
+    }
+    
+    for key, value in pairs(defaults) do
+        if AllforOneCharDB[key] == nil then
+            AllforOneCharDB[key] = value
+        end
+    end
+    
+    -- Global defaults
+    if AllforOneDB.AddonUsers == nil then
+        AllforOneDB.AddonUsers = {}
+    end
+end
+
+----------------------------------------------------------------------
+--  Guild Functions
+----------------------------------------------------------------------
+
+function BR:IsInGuild()
+    return IsInGuild()
+end
+
+function BR:GetGuildName()
+    if not self:IsInGuild() then return nil end
+    local guildName = GetGuildInfo("player")
+    return guildName
+end
+
+function BR:IsGuildMember(playerName)
+    if not self:IsInGuild() then return false end
+    
+    -- Remove realm name if present
+    local name = playerName
+    if name then
+        name = strsplit("-", name)
+    end
+    
+    local numMembers = GetNumGuildMembers()
+    for i = 1, numMembers do
+        local guildMemberName = GetGuildRosterInfo(i)
+        if guildMemberName then
+            local guildMemberShort = strsplit("-", guildMemberName)
+            if guildMemberShort and name and guildMemberShort:lower() == name:lower() then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function BR:IsGuildOfficer()
+    if not self:IsInGuild() then return false end
+    local _, _, rankIndex = GetGuildInfo("player")
+    -- Rank 0 = Guild Master, Rank 1 = typically first officer rank
+    -- We consider ranks 0 and 1 as officers, but this may vary per guild
+    return rankIndex ~= nil and rankIndex <= 1
+end
+
+function BR:IsGuildMaster()
+    if not self:IsInGuild() then return false end
+    local _, _, rankIndex = GetGuildInfo("player")
+    return rankIndex == 0
+end
+
+----------------------------------------------------------------------
+--  Module System
+----------------------------------------------------------------------
+
+function BR:RegisterModule(name, module)
+    self.Modules[name] = module
+    if module.OnInitialize then
+        module:OnInitialize()
+    end
+end
+
+function BR:EnableModules()
+    for name, module in pairs(self.Modules) do
+        if module.OnEnable and self:GetSetting("Enabled") then
+            module:OnEnable()
+            self:Debug("Module enabled: " .. name)
+        end
+    end
+end
+
+function BR:DisableModules()
+    for name, module in pairs(self.Modules) do
+        if module.OnDisable then
+            module:OnDisable()
+            self:Debug("Module disabled: " .. name)
+        end
+    end
+end
+
+function BR:RefreshModules()
+    for name, module in pairs(self.Modules) do
+        if module.Refresh then
+            module:Refresh()
+        end
+    end
+end
+
+----------------------------------------------------------------------
+--  Addon Communication
+----------------------------------------------------------------------
+
+local COMM_PREFIX = "AllforOne"
+local commRegistered = false
+
+function BR:InitializeComm()
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        local success = C_ChatInfo.RegisterAddonMessagePrefix(COMM_PREFIX)
+        if success then
+            commRegistered = true
+            self:Debug("Addon message prefix registered")
+        end
+    end
+end
+
+function BR:SendAddonMessage(msg, channel, target)
+    if not commRegistered then return end
+    
+    channel = channel or "GUILD"
+    if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        C_ChatInfo.SendAddonMessage(COMM_PREFIX, msg, channel, target)
+    end
+end
+
+function BR:BroadcastStatus()
+    if not self:IsInGuild() then return end
+    
+    local status = self:GetSetting("Enabled") and "ENABLED" or "DISABLED"
+    local playerName = UnitName("player")
+    local msg = string.format("STATUS:%s:%s:%s", playerName, status, self.Version)
+    self:SendAddonMessage(msg, "GUILD")
+    
+    -- Also update own entry immediately (we don't receive our own messages)
+    if not AllforOneDB.AddonUsers then
+        AllforOneDB.AddonUsers = {}
+    end
+    local key = playerName:lower()
+    AllforOneDB.AddonUsers[key] = {
+        status = status,
+        version = self.Version,
+        lastSeen = time(),
+        sender = playerName,
+        displayName = playerName
+    }
+    
+    self:Debug("Status broadcasted: " .. status)
+end
+
+-- Setup periodic heartbeat to keep status up to date
+function BR:SetupStatusHeartbeat()
+    if self.heartbeatTimer then return end
+    
+    -- Broadcast status every 2 minutes for better responsiveness
+    self.heartbeatTimer = C_Timer.NewTicker(120, function()
+        if BR:IsInGuild() then
+            BR:BroadcastStatus()
+        end
+    end)
+    
+    self:Debug("Status heartbeat started (every 2 min)")
+end
+
+-- Ping all online guild members and track who responds
+function BR:PingGuildMembers()
+    if not self:IsInGuild() then return end
+    
+    -- Store timestamp of when we pinged
+    AllforOneDB.LastPingTime = time()
+    AllforOneDB.PendingPingResponses = {}
+    
+    -- Get list of online guild members
+    local numMembers = GetNumGuildMembers()
+    local onlineCount = 0
+    
+    for i = 1, numMembers do
+        local fullName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+        if fullName and isOnline then
+            local shortName = strsplit("-", fullName)
+            AllforOneDB.PendingPingResponses[shortName:lower()] = true
+            onlineCount = onlineCount + 1
+        end
+    end
+    
+    -- Send the ping
+    self:SendAddonMessage("PING", "GUILD")
+    self:Debug("Pinged guild - " .. onlineCount .. " online members")
+    self:Print("Status-Anfrage an " .. onlineCount .. " Online-Mitglieder gesendet...", "info")
+    
+    -- After 10 seconds, check who didn't respond
+    C_Timer.After(10, function()
+        BR:CheckPingResponses()
+    end)
+    
+    return onlineCount
+end
+
+-- Check who responded to the ping
+function BR:CheckPingResponses()
+    if not AllforOneDB.PendingPingResponses then return end
+    if not AllforOneDB.LastPingTime then return end
+    
+    local pingTime = AllforOneDB.LastPingTime
+    local noResponseCount = 0
+    local responseCount = 0
+    local totalOnline = 0
+    
+    -- Check each pending response
+    for name, pending in pairs(AllforOneDB.PendingPingResponses) do
+        totalOnline = totalOnline + 1
+        local info = AllforOneDB.AddonUsers and AllforOneDB.AddonUsers[name]
+        
+        if info and info.lastSeen and info.lastSeen >= pingTime then
+            -- Got a response after the ping
+            responseCount = responseCount + 1
+            self:Debug("Response received from: " .. name)
+        else
+            -- No response - mark as no addon
+            noResponseCount = noResponseCount + 1
+            if not AllforOneDB.AddonUsers then
+                AllforOneDB.AddonUsers = {}
+            end
+            -- Mark as no addon (nil status means no addon)
+            AllforOneDB.AddonUsers[name] = nil
+            self:Debug("No response from online player: " .. name .. " (no addon)")
+        end
+    end
+    
+    -- Clear pending list
+    AllforOneDB.PendingPingResponses = nil
+    
+    -- Show summary
+    self:Print("Status-Sync abgeschlossen: " .. responseCount .. "/" .. totalOnline .. " haben geantwortet.", "info")
+    if noResponseCount > 0 then
+        self:Debug(noResponseCount .. " online players have no addon installed")
+    end
+    
+    -- Refresh admin panel if open
+    if BR.Modules.AdminPanel and BR.Modules.AdminPanel.Refresh then
+        BR.Modules.AdminPanel:Refresh()
+    end
+end
+
+-- Clean up old addon user entries that haven't responded
+function BR:CleanupOldAddonUsers()
+    if not AllforOneDB.AddonUsers then return end
+    
+    local now = time()
+    local cutoff = 7 * 24 * 60 * 60 -- 7 days
+    local cleaned = 0
+    
+    for name, info in pairs(AllforOneDB.AddonUsers) do
+        if info.lastSeen and (now - info.lastSeen) > cutoff then
+            AllforOneDB.AddonUsers[name] = nil
+            cleaned = cleaned + 1
+            self:Debug("Cleaned up old entry: " .. name)
+        end
+    end
+    
+    if cleaned > 0 then
+        self:Debug("Cleaned up " .. cleaned .. " old entries")
+    end
+end
+
+function BR:HandleAddonMessage(prefix, message, channel, sender)
+    if prefix ~= COMM_PREFIX then return end
+    
+    local msgType, data1, data2, data3 = strsplit(":", message)
+    
+    if msgType == "STATUS" then
+        -- Store user status for admin panel
+        local playerName, status, version = data1, data2, data3
+        if not AllforOneDB.AddonUsers then
+            AllforOneDB.AddonUsers = {}
+        end
+        local shortName = playerName and strsplit("-", playerName) or playerName
+        local key = shortName and shortName:lower() or playerName:lower()
+        
+        local oldInfo = AllforOneDB.AddonUsers[key]
+        local isNew = not oldInfo
+        local statusChanged = oldInfo and oldInfo.status ~= status
+        
+        AllforOneDB.AddonUsers[key] = {
+            status = status,
+            version = version,
+            lastSeen = time(),
+            sender = sender,
+            displayName = playerName
+        }
+        
+        -- Remove from pending responses if we're tracking
+        if AllforOneDB.PendingPingResponses then
+            AllforOneDB.PendingPingResponses[key] = nil
+        end
+        
+        if isNew then
+            self:Debug("New addon user: " .. playerName .. " (" .. status .. ", v" .. (version or "?") .. ")")
+        elseif statusChanged then
+            self:Debug("Status changed: " .. playerName .. " -> " .. status)
+        else
+            self:Debug("Status update: " .. playerName .. " (" .. status .. ")")
+        end
+    elseif msgType == "PING" then
+        -- Respond to status request immediately
+        self:BroadcastStatus()
+    elseif msgType == "GUILD_SETTINGS" then
+        -- Received guild-wide settings from an officer
+        self:HandleGuildSettings(message, sender)
+    elseif msgType == "REQUEST_SETTINGS" then
+        -- Someone is requesting current guild settings (only guild master can respond)
+        if self:IsGuildMaster() then
+            self:BroadcastGuildSettings()
+        end
+    elseif msgType == "GUILD_RULES_UPDATE" then
+        -- Guild master updated rules
+        self:HandleGuildRulesUpdate(message, sender)
+    elseif msgType == "RESET_WARNING" then
+        -- Officer wants to reset a player's warning
+        local targetPlayer = data1
+        local myName = UnitName("player")
+        if targetPlayer and targetPlayer:lower() == myName:lower() then
+            -- This reset is for me
+            if BR.Modules.SecurityCheck then
+                BR.Modules.SecurityCheck:ResetWarning(sender)
+            end
+        end
+    end
+end
+
+function BR:HandleGuildSettings(message, sender)
+    -- Only accept settings from guild master
+    -- We can't verify sender rank directly, so we trust the message
+    -- but store who sent it for reference
+    local parts = {strsplit(":", message)}
+    if parts[1] ~= "GUILD_SETTINGS" then return end
+    
+    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:MailBlockMode:timestamp
+    local settings = {
+        BlockTrade = parts[2] == "1",
+        BlockGroupInvites = parts[3] == "1",
+        BlockLFG = parts[4] == "1",
+        BlockAuction = parts[5] == "1",
+        BlockMail = parts[6] == "1",
+        BlockWarbound = parts[7] == "1",
+        MailBlockMode = parts[8] or "selective",
+    }
+    local timestamp = tonumber(parts[9]) or 0
+    
+    -- Only update if newer than our stored settings
+    local storedTimestamp = AllforOneDB.GuildSettingsTimestamp or 0
+    if timestamp >= storedTimestamp then
+        AllforOneDB.GuildSettings = settings
+        AllforOneDB.GuildSettingsTimestamp = timestamp
+        AllforOneDB.GuildSettingsSender = sender
+        
+        -- Apply settings if not the guild master (guild master sets their own)
+        if not self:IsGuildMaster() then
+            for key, value in pairs(settings) do
+                AllforOneCharDB[key] = value
+            end
+            self:RefreshModules()
+            self:Debug("Guild settings applied from " .. sender)
+        end
+    end
+end
+
+function BR:BroadcastGuildSettings()
+    if not self:IsGuildMaster() then return end
+    if not self:IsInGuild() then return end
+    
+    local settings = {
+        self:GetSetting("BlockTrade") and "1" or "0",
+        self:GetSetting("BlockGroupInvites") and "1" or "0",
+        self:GetSetting("BlockLFG") and "1" or "0",
+        self:GetSetting("BlockAuction") and "1" or "0",
+        self:GetSetting("BlockMail") and "1" or "0",
+        self:GetSetting("BlockWarbound") and "1" or "0",
+        self:GetSetting("MailBlockMode") or "selective",
+        tostring(time())
+    }
+    
+    local msg = "GUILD_SETTINGS:" .. table.concat(settings, ":")
+    self:SendAddonMessage(msg, "GUILD")
+    
+    -- Also store locally
+    AllforOneDB.GuildSettings = {
+        BlockTrade = self:GetSetting("BlockTrade"),
+        BlockGroupInvites = self:GetSetting("BlockGroupInvites"),
+        BlockLFG = self:GetSetting("BlockLFG"),
+        BlockAuction = self:GetSetting("BlockAuction"),
+        BlockMail = self:GetSetting("BlockMail"),
+        BlockWarbound = self:GetSetting("BlockWarbound"),
+        MailBlockMode = self:GetSetting("MailBlockMode"),
+    }
+    AllforOneDB.GuildSettingsTimestamp = time()
+    
+    self:Debug("Guild settings broadcasted")
+end
+
+function BR:RequestGuildSettings()
+    if not self:IsInGuild() then return end
+    self:SendAddonMessage("REQUEST_SETTINGS", "GUILD")
+end
+
+function BR:BroadcastGuildRules(rules)
+    if not self:IsGuildMaster() then return end
+    if not self:IsInGuild() then return end
+    
+    -- Rules are too long for single message, so we store locally and sync timestamp
+    AllforOneDB.GuildRules = rules
+    AllforOneDB.GuildRulesTimestamp = time()
+    
+    -- Send sync signal with timestamp (rules will be requested separately)
+    local msg = "GUILD_RULES_UPDATE:" .. tostring(time())
+    self:SendAddonMessage(msg, "GUILD")
+    
+    self:Debug("Guild rules broadcasted")
+end
+
+function BR:HandleGuildRulesUpdate(message, sender)
+    local parts = {strsplit(":", message)}
+    if parts[1] ~= "GUILD_RULES_UPDATE" then return end
+    
+    local timestamp = tonumber(parts[2]) or 0
+    local storedTimestamp = AllforOneDB.GuildRulesTimestamp or 0
+    
+    -- Request full rules if newer
+    if timestamp > storedTimestamp then
+        self:SendAddonMessage("REQUEST_RULES", "WHISPER", sender)
+    end
+end
+
+----------------------------------------------------------------------
+--  Event Handling
+----------------------------------------------------------------------
+
+BR.Events:RegisterEvent("ADDON_LOADED")
+BR.Events:RegisterEvent("PLAYER_LOGIN")
+BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+BR.Events:RegisterEvent("CHAT_MSG_ADDON")
+BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
+
+BR.Events:SetScript("OnEvent", function(self, event, ...)
+    if event == "ADDON_LOADED" then
+        local loadedAddon = ...
+        if loadedAddon == addonName then
+            BR:InitializeDefaults()
+            BR:InitializeComm()
+            BR:Debug("Addon loaded")
+        end
+    elseif event == "PLAYER_LOGIN" then
+        BR:EnableModules()
+        C_Timer.After(3, function()
+            -- Request guild settings from officers
+            BR:RequestGuildSettings()
+        end)
+        C_Timer.After(5, function()
+            BR:BroadcastStatus()
+            -- If guild master, also broadcast current settings
+            if BR:IsGuildMaster() then
+                BR:BroadcastGuildSettings()
+            end
+        end)
+        -- Ping all guild members after 8 seconds (give time for everything to load)
+        C_Timer.After(8, function()
+            BR:PingGuildMembers()
+        end)
+        -- Setup periodic status broadcast (heartbeat every 5 minutes)
+        BR:SetupStatusHeartbeat()
+        
+        if BR:GetSetting("Enabled") then
+            BR:Print("Addon aktiviert für diesen Charakter", "info")
+        else
+            BR:Print("Addon ist deaktiviert. Nutze /br enable zum Aktivieren.", "warning")
+        end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        BR:RefreshModules()
+    elseif event == "CHAT_MSG_ADDON" then
+        BR:HandleAddonMessage(...)
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Refresh guild member cache
+        if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
+            BR.Modules.GuildCheck:RefreshCache()
+        end
+    end
+end)
+
+----------------------------------------------------------------------
+--  Slash Commands
+----------------------------------------------------------------------
+
+SLASH_ALLFORONE1 = "/allforone"
+SLASH_ALLFORONE2 = "/afo"
+
+SlashCmdList["ALLFORONE"] = function(msg)
+    local cmd, arg = strsplit(" ", msg, 2)
+    cmd = cmd and cmd:lower() or ""
+    
+    if cmd == "" or cmd == "config" or cmd == "options" then
+        BR:OpenConfig()
+    elseif cmd == "status" then
+        BR:Print("Gilde: " .. (BR:GetGuildName() or "Keine"))
+        BR:Print("Gildenmeister: " .. (BR:IsGuildMaster() and "Ja" or "Nein"))
+    elseif cmd == "admin" or cmd == "overview" or cmd == "list" then
+        BR:OpenAddonOverview()
+    elseif cmd == "ping" then
+        BR:PingGuildMembers()
+    elseif cmd == "debug" then
+        local current = BR:GetSetting("DebugMode")
+        BR:SetSetting("DebugMode", not current, true)
+        BR:Print("Debug-Modus: " .. (not current and "aktiviert" or "deaktiviert"))
+    elseif cmd == "reset" then
+        -- Reset security warning for a player (officers only)
+        if not BR:IsGuildOfficer() then
+            BR:Print("Nur Offiziere können Warnungen zurücksetzen!", "error")
+            return
+        end
+        if not arg or arg == "" then
+            BR:Print("Verwendung: /br reset <Spielername>", "warning")
+            return
+        end
+        -- Send reset message to the target player
+        BR:SendAddonMessage("RESET_WARNING:" .. arg, "GUILD")
+        BR:Print("Reset-Befehl für " .. arg .. " gesendet.", "info")
+    else
+        BR:Print("Befehle:")
+        BR:Print("  /afo - Einstellungen öffnen")
+        BR:Print("  /afo status - Status anzeigen")
+        if BR:IsGuildOfficer() then
+            BR:Print("  /afo admin - Offizier-Übersicht öffnen")
+            BR:Print("  /afo ping - Gildenmitglieder pingen")
+            BR:Print("  /afo reset <Name> - Warnung zurücksetzen")
+        end
+    end
+end
+
+BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
