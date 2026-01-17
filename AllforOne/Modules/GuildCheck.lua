@@ -8,7 +8,7 @@ local addonName, BR = ...
 local GuildCheck = {
     cache = {},
     lastUpdate = 0,
-    updateInterval = 60, -- seconds
+    updateInterval = 120, -- seconds (increased for performance)
 }
 
 function GuildCheck:OnInitialize()

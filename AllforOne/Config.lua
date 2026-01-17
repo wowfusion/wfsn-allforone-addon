@@ -12,7 +12,18 @@ local Config = {
 }
 
 function BR:OpenConfig()
-    Config:Show()
+    -- Open WoW Interface Options -> AddOns -> AllforOne
+    if Settings and Settings.OpenToCategory then
+        if BR.settingsCategory then
+            Settings.OpenToCategory(BR.settingsCategory:GetID())
+        else
+            -- Fallback: try to find by name
+            Settings.OpenToCategory("AllforOne")
+        end
+    elseif InterfaceOptionsFrame_OpenToCategory then
+        InterfaceOptionsFrame_OpenToCategory("AllforOne")
+        InterfaceOptionsFrame_OpenToCategory("AllforOne") -- Call twice for subcategories
+    end
 end
 
 -- Helper function to create gold-styled button
@@ -386,3 +397,267 @@ function Config:Show()
 end
 
 BR:RegisterModule("Config", Config)
+
+----------------------------------------------------------------------
+--  Interface Options Panel Integration
+----------------------------------------------------------------------
+
+local function CreateInterfaceOptionsPanel()
+    -- Create the main options panel for Interface Options
+    local panel = CreateFrame("Frame", "AllforOneOptionsPanel", UIParent)
+    panel.name = "AllforOne"
+    
+    -- Create scroll frame for content
+    local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 10, -10)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -26, 10)
+    
+    -- Style the scrollbar to be more minimal
+    local scrollBar = scrollFrame.ScrollBar or _G[scrollFrame:GetName() .. "ScrollBar"]
+    if scrollBar then
+        scrollBar:ClearAllPoints()
+        scrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -30)
+        scrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 30)
+        scrollBar:SetWidth(12)
+    end
+    
+    -- Create scroll child (content container)
+    local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+    scrollChild:SetSize(620, 700)
+    scrollFrame:SetScrollChild(scrollChild)
+    
+    -- Banner Logo (centered at top, correct aspect ratio ~5:1)
+    local banner = scrollChild:CreateTexture(nil, "ARTWORK")
+    banner:SetSize(500, 100) -- Correct aspect ratio for the banner (5:1)
+    banner:SetPoint("TOP", 0, -10)
+    banner:SetTexture("Interface\\AddOns\\AllforOne\\media\\banner-allforone.png")
+    
+    -- Version (below banner)
+    local version = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    version:SetPoint("TOP", banner, "BOTTOM", 0, -5)
+    version:SetText("|cff888888v" .. (BR.Version or "1.0.2") .. " - wowfusion.de|r")
+    
+    -- Character & Guild info (like in the main config panel)
+    local charInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    charInfo:SetPoint("TOP", version, "BOTTOM", 0, -5)
+    local playerName = UnitName("player")
+    local guildName = BR:GetGuildName() or "Keine Gilde"
+    charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. guildName .. "|r")
+    
+    -- Separator after banner
+    local sepBanner = scrollChild:CreateTexture(nil, "ARTWORK")
+    sepBanner:SetPoint("TOP", charInfo, "BOTTOM", 0, -10)
+    sepBanner:SetSize(500, 1)
+    sepBanner:SetColorTexture(0.796, 0.71, 0.482, 0.5)
+    
+    -- Description
+    local desc = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    desc:SetPoint("TOP", sepBanner, "BOTTOM", 0, -15)
+    desc:SetWidth(500)
+    desc:SetJustifyH("CENTER")
+    desc:SetText("Gilden-Management Addon für kontrolliertes Spielen.\nEinstellungen werden vom Gildenmeister festgelegt.")
+    
+    -- Separator
+    local sep = scrollChild:CreateTexture(nil, "ARTWORK")
+    sep:SetPoint("TOP", desc, "BOTTOM", 0, -15)
+    sep:SetSize(500, 1)
+    sep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+    
+    -- Status section
+    local isGuildMaster = BR:IsGuildMaster()
+    
+    local statusTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    statusTitle:SetPoint("TOPLEFT", sep, "LEFT", 16, -15)
+    if isGuildMaster then
+        statusTitle:SetText("|cffffffffBlockierungen (Gildenmeister):|r")
+    else
+        statusTitle:SetText("|cff888888Aktueller Status:|r")
+    end
+    
+    local statusLabels = {}
+    
+    local function CreateStatusRow(parent, anchor, label, settingKey, yOff)
+        -- Use real WoW checkbox with consistent font
+        local check = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
+        check:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff or -3)
+        check:SetScale(1.0)
+        
+        -- Set consistent font for all checkboxes
+        check.Text:SetFontObject("GameFontHighlight")
+        check.Text:SetText(" " .. label)
+        
+        -- Gray out text for non-guild masters
+        if isGuildMaster then
+            check.Text:SetTextColor(1, 1, 1)
+        else
+            check.Text:SetTextColor(0.5, 0.5, 0.5)
+        end
+        
+        -- Only guild master can change these settings
+        if isGuildMaster then
+            check:SetScript("OnClick", function(self)
+                local value = self:GetChecked()
+                BR:SetSetting(settingKey, value, true)
+                BR:RefreshModules()
+                -- Broadcast to guild
+                BR:BroadcastGuildSettings()
+            end)
+        else
+            -- Disable checkbox for non-guild masters
+            check:SetEnabled(false)
+            check:SetAlpha(0.6)
+        end
+        
+        check.settingKey = settingKey
+        check.label = label
+        
+        statusLabels[settingKey] = check
+        return check
+    end
+    
+    local lastRow = statusTitle
+    local settings = {
+        {key = "BlockTrade", label = "Handel nur mit Gildenmitgliedern"},
+        {key = "BlockGroupInvites", label = "Gruppeneinladungen nur von Gilde"},
+        {key = "BlockLFG", label = "Dungeonbrowser/LFG blockieren"},
+        {key = "BlockAuction", label = "Auktionshaus blockieren"},
+        {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
+        {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
+        {key = "BlockMail", label = "Briefkasten einschränken"},
+    }
+    
+    for _, setting in ipairs(settings) do
+        lastRow = CreateStatusRow(scrollChild, lastRow, setting.label, setting.key)
+    end
+    
+    -- MailBlockMode dropdown (only for Guild Master, below BlockMail)
+    local mailModeRow = CreateFrame("Frame", nil, scrollChild)
+    mailModeRow:SetSize(400, 24)
+    mailModeRow:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", 20, -5)
+    
+    local mailModeLabel = mailModeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    mailModeLabel:SetPoint("LEFT", 0, 0)
+    mailModeLabel:SetText("Briefkasten-Modus:")
+    
+    local mailModeBtn = CreateFrame("Button", nil, mailModeRow, "UIPanelButtonTemplate")
+    mailModeBtn:SetSize(180, 22)
+    mailModeBtn:SetPoint("LEFT", mailModeLabel, "RIGHT", 10, 0)
+    
+    local function UpdateMailModeBtn()
+        local mode = BR:GetSetting("MailBlockMode") or "selective"
+        mailModeBtn:SetText(mode == "full" and "Komplett blockieren" or "Nur Fremde blockieren")
+    end
+    UpdateMailModeBtn()
+    statusLabels["MailBlockMode"] = {UpdateDisplay = UpdateMailModeBtn}
+    
+    if isGuildMaster then
+        mailModeBtn:SetScript("OnClick", function()
+            local current = BR:GetSetting("MailBlockMode") or "selective"
+            local newMode = current == "full" and "selective" or "full"
+            BR:SetSetting("MailBlockMode", newMode, true)
+            UpdateMailModeBtn()
+            BR:BroadcastGuildSettings()
+        end)
+        mailModeLabel:SetTextColor(1, 1, 1)
+    else
+        mailModeBtn:Disable()
+        mailModeBtn:SetAlpha(0.6)
+        mailModeLabel:SetTextColor(0.5, 0.5, 0.5)
+    end
+    
+    lastRow = mailModeRow
+    
+    -- Separator 2
+    local sep2 = scrollChild:CreateTexture(nil, "ARTWORK")
+    sep2:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", -10, -15)
+    sep2:SetSize(500, 1)
+    sep2:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+    
+    -- Local options title
+    local localTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    localTitle:SetPoint("TOPLEFT", sep2, "BOTTOMLEFT", 0, -15)
+    localTitle:SetText("|cffffffffLokale Einstellungen:|r")
+    
+    -- Checkboxes for local settings (same style as status checkboxes)
+    local function CreateOptionCheckbox(parent, anchor, label, settingKey, yOff)
+        local check = CreateFrame("CheckButton", nil, parent, "InterfaceOptionsCheckButtonTemplate")
+        check:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff or -3)
+        check:SetScale(1.0)
+        
+        -- Use same font as status checkboxes
+        check.Text:SetFontObject("GameFontHighlight")
+        check.Text:SetText(" " .. label)
+        check.Text:SetTextColor(1, 1, 1)
+        
+        check:SetScript("OnClick", function(self)
+            BR:SetSetting(settingKey, self:GetChecked(), true)
+        end)
+        
+        check.settingKey = settingKey
+        statusLabels["check_" .. settingKey] = check
+        return check
+    end
+    
+    local muteCheck = CreateOptionCheckbox(scrollChild, localTitle, "Benachrichtigungstöne deaktivieren", "MuteNotificationSounds")
+    local welcomeCheck = CreateOptionCheckbox(scrollChild, muteCheck, "Willkommensbildschirm beim Login", "ShowWelcomeOnLogin")
+    local debugCheck = CreateOptionCheckbox(scrollChild, welcomeCheck, "Debug-Modus", "DebugMode")
+    
+    -- Send Settings Button (only for Guild Master)
+    if isGuildMaster then
+        local sep3 = scrollChild:CreateTexture(nil, "ARTWORK")
+        sep3:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", -10, -15)
+        sep3:SetSize(500, 1)
+        sep3:SetColorTexture(0.796, 0.71, 0.482, 0.5)
+        
+        local sendBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+        sendBtn:SetSize(200, 28)
+        sendBtn:SetPoint("TOPLEFT", sep3, "BOTTOMLEFT", 10, -15)
+        sendBtn:SetText("Einstellungen senden")
+        sendBtn:SetScript("OnClick", function()
+            BR:SendGuildSettings()
+        end)
+        
+        local sendInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        sendInfo:SetPoint("LEFT", sendBtn, "RIGHT", 10, 0)
+        sendInfo:SetText("|cff888888Sendet aktuelle Einstellungen an alle Online-Mitglieder|r")
+    end
+    
+    -- Refresh function
+    local function RefreshPanel()
+        -- Update all checkboxes
+        for key, check in pairs(statusLabels) do
+            if check.SetChecked then
+                local settingKey = check.settingKey or key:gsub("check_", "")
+                check:SetChecked(BR:GetSetting(settingKey))
+            elseif check.UpdateDisplay then
+                check.UpdateDisplay()
+            end
+        end
+    end
+    
+    panel:SetScript("OnShow", RefreshPanel)
+    
+    -- Register with the new Settings API (WoW 10.0+)
+    if Settings and Settings.RegisterCanvasLayoutCategory then
+        local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+        Settings.RegisterAddOnCategory(category)
+        BR.settingsCategory = category
+    else
+        -- Fallback for older API
+        if InterfaceOptions_AddCategory then
+            InterfaceOptions_AddCategory(panel)
+        end
+    end
+    
+    BR.optionsPanel = panel
+end
+
+-- Create the panel when addon loads
+local optionsFrame = CreateFrame("Frame")
+optionsFrame:RegisterEvent("ADDON_LOADED")
+optionsFrame:SetScript("OnEvent", function(self, event, addon)
+    if addon == addonName then
+        C_Timer.After(1, CreateInterfaceOptionsPanel)
+        self:UnregisterEvent("ADDON_LOADED")
+    end
+end)

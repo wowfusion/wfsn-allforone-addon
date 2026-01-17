@@ -342,14 +342,14 @@ end
 function BR:SetupStatusHeartbeat()
     if self.heartbeatTimer then return end
     
-    -- Broadcast status every 2 minutes for better responsiveness
-    self.heartbeatTimer = C_Timer.NewTicker(120, function()
+    -- Broadcast status every 5 minutes (reduced frequency for performance)
+    self.heartbeatTimer = C_Timer.NewTicker(300, function()
         if BR:IsInGuild() then
             BR:BroadcastStatus()
         end
     end)
     
-    self:Debug("Status heartbeat started (every 2 min)")
+    self:Debug("Status heartbeat started (every 5 min)")
 end
 
 -- Ping all online guild members and track who responds
@@ -494,13 +494,34 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
     elseif msgType == "PING" then
         -- Respond to status request immediately
         self:BroadcastStatus()
-    elseif msgType == "GUILD_SETTINGS" then
-        -- Received guild-wide settings from an officer
+    elseif msgType == "GUILD_SETTINGS" or msgType == "OFFICER_SETTINGS" then
+        -- Received guild-wide settings from GM or officer
         self:HandleGuildSettings(message, sender)
-    elseif msgType == "REQUEST_SETTINGS" then
-        -- Someone is requesting current guild settings (only guild master can respond)
+    elseif msgType == "REQUEST_HASH" then
+        -- Someone is requesting the current settings hash
+        -- Priority: Guild Master > Officer
         if self:IsGuildMaster() then
+            self:RespondToHashRequest(sender)
+        elseif self:IsGuildOfficer() then
+            -- Officer responds after a small delay to let GM respond first
+            C_Timer.After(0.5, function()
+                self:RespondToHashRequest(sender)
+            end)
+        end
+    elseif msgType == "HASH_RESPONSE" then
+        -- Received hash response, compare with local hash
+        self:HandleHashResponse(message, sender)
+    elseif msgType == "REQUEST_SETTINGS" then
+        -- Someone is requesting current guild settings
+        -- Priority: Guild Master > Officer
+        if self:IsGuildMaster() then
+            -- Guild master always responds
             self:BroadcastGuildSettings()
+        elseif self:IsGuildOfficer() then
+            -- Officer responds with their settings (includes hash for comparison)
+            C_Timer.After(0.5, function()
+                self:BroadcastGuildSettingsAsOfficer()
+            end)
         end
     elseif msgType == "GUILD_RULES_UPDATE" then
         -- Guild master updated rules
@@ -518,14 +539,45 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
     end
 end
 
-function BR:HandleGuildSettings(message, sender)
-    -- Only accept settings from guild master
-    -- We can't verify sender rank directly, so we trust the message
-    -- but store who sent it for reference
+-- Handle hash response from GM or Officer
+function BR:HandleHashResponse(message, sender)
     local parts = {strsplit(":", message)}
-    if parts[1] ~= "GUILD_SETTINGS" then return end
+    if parts[1] ~= "HASH_RESPONSE" then return end
     
-    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:MailBlockMode:timestamp
+    local remoteHash = parts[2] or ""
+    local isFromGM = parts[3] == "1"
+    local localHash = self:GetStoredHash()
+    
+    -- If we already received a GM response, ignore officer responses
+    if BR.receivedGMHash and not isFromGM then
+        self:Debug("Ignoring officer hash response (already have GM hash)")
+        return
+    end
+    
+    if isFromGM then
+        BR.receivedGMHash = true
+    end
+    
+    self:Debug("Hash response from " .. sender .. " (GM: " .. tostring(isFromGM) .. "): " .. remoteHash .. " vs local: " .. localHash)
+    
+    -- Compare hashes
+    if remoteHash ~= localHash then
+        -- Hash is different, request full settings
+        self:Debug("Hash mismatch! Requesting full settings...")
+        self:RequestGuildSettings()
+    else
+        self:Debug("Hash matches, settings are up to date")
+    end
+end
+
+function BR:HandleGuildSettings(message, sender)
+    local parts = {strsplit(":", message)}
+    if parts[1] ~= "GUILD_SETTINGS" and parts[1] ~= "OFFICER_SETTINGS" then return end
+    
+    local isFromGuildMaster = parts[1] == "GUILD_SETTINGS"
+    local isFromOfficer = parts[1] == "OFFICER_SETTINGS"
+    
+    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):hash
     local settings = {
         BlockTrade = parts[2] == "1",
         BlockGroupInvites = parts[3] == "1",
@@ -533,21 +585,52 @@ function BR:HandleGuildSettings(message, sender)
         BlockAuction = parts[5] == "1",
         BlockMail = parts[6] == "1",
         BlockWarbound = parts[7] == "1",
-        MailBlockMode = parts[8] or "selective",
+        BlockCraftingOrders = parts[8] == "1",
+        MailBlockMode = parts[9] == "1" and "full" or "selective",
     }
-    local timestamp = tonumber(parts[9]) or 0
+    local receivedHash = parts[10] or ""
     
-    -- Only update if newer than our stored settings
-    local storedTimestamp = AllforOneDB.GuildSettingsTimestamp or 0
-    if timestamp >= storedTimestamp then
+    -- Priority logic:
+    -- 1. Guild Master settings ALWAYS override everything
+    -- 2. Officer settings only apply if we don't have recent GM settings
+    
+    local storedFromGM = AllforOneDB.GuildSettingsFromGM or false
+    local shouldApply = false
+    
+    if isFromGuildMaster then
+        -- Guild Master always wins
+        shouldApply = true
+        AllforOneDB.GuildSettingsFromGM = true
+        self:Debug("Received settings from Guild Master: " .. sender .. " - Hash: " .. receivedHash)
+    elseif isFromOfficer then
+        -- Officer settings only apply if no recent GM settings
+        if not storedFromGM then
+            shouldApply = true
+            AllforOneDB.GuildSettingsFromGM = false
+            self:Debug("Received settings from Officer: " .. sender .. " - Hash: " .. receivedHash)
+        else
+            self:Debug("Ignored Officer settings - have GM settings")
+        end
+    end
+    
+    if shouldApply then
         AllforOneDB.GuildSettings = settings
-        AllforOneDB.GuildSettingsTimestamp = timestamp
         AllforOneDB.GuildSettingsSender = sender
         
+        -- Store the hash
+        self:SetStoredHash(receivedHash)
+        
         -- Apply settings if not the guild master (guild master sets their own)
+        -- Only apply guild-synced settings, NOT local settings like DebugMode
         if not self:IsGuildMaster() then
-            for key, value in pairs(settings) do
-                AllforOneCharDB[key] = value
+            local guildSyncedSettings = {
+                "BlockTrade", "BlockGroupInvites", "BlockLFG", "BlockAuction",
+                "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode"
+            }
+            for _, key in ipairs(guildSyncedSettings) do
+                if settings[key] ~= nil then
+                    AllforOneCharDB[key] = settings[key]
+                end
             end
             self:RefreshModules()
             self:Debug("Guild settings applied from " .. sender)
@@ -555,10 +638,44 @@ function BR:HandleGuildSettings(message, sender)
     end
 end
 
-function BR:BroadcastGuildSettings()
+-- Calculate a hash from current settings (changes only when settings change)
+function BR:CalculateSettingsHash()
+    local mailMode = self:GetSetting("MailBlockMode") or "selective"
+    local hashParts = {
+        self:GetSetting("BlockTrade") and "1" or "0",
+        self:GetSetting("BlockGroupInvites") and "1" or "0",
+        self:GetSetting("BlockLFG") and "1" or "0",
+        self:GetSetting("BlockAuction") and "1" or "0",
+        self:GetSetting("BlockMail") and "1" or "0",
+        self:GetSetting("BlockWarbound") and "1" or "0",
+        self:GetSetting("BlockCraftingOrders") and "1" or "0",
+        mailMode == "full" and "1" or "0",
+    }
+    return table.concat(hashParts, "")
+end
+
+-- Get stored hash from DB
+function BR:GetStoredHash()
+    return AllforOneDB.GuildSettingsHash or ""
+end
+
+-- Store hash in DB
+function BR:SetStoredHash(hash)
+    AllforOneDB.GuildSettingsHash = hash
+end
+
+function BR:BroadcastGuildSettings(forceNewHash)
     if not self:IsGuildMaster() then return end
     if not self:IsInGuild() then return end
     
+    local currentHash = self:CalculateSettingsHash()
+    
+    -- Only update stored hash if settings actually changed (or forced)
+    if forceNewHash or currentHash ~= self:GetStoredHash() then
+        self:SetStoredHash(currentHash)
+    end
+    
+    local mailMode = self:GetSetting("MailBlockMode") or "selective"
     local settings = {
         self:GetSetting("BlockTrade") and "1" or "0",
         self:GetSetting("BlockGroupInvites") and "1" or "0",
@@ -566,8 +683,9 @@ function BR:BroadcastGuildSettings()
         self:GetSetting("BlockAuction") and "1" or "0",
         self:GetSetting("BlockMail") and "1" or "0",
         self:GetSetting("BlockWarbound") and "1" or "0",
-        self:GetSetting("MailBlockMode") or "selective",
-        tostring(time())
+        self:GetSetting("BlockCraftingOrders") and "1" or "0",
+        mailMode == "full" and "1" or "0",
+        currentHash
     }
     
     local msg = "GUILD_SETTINGS:" .. table.concat(settings, ":")
@@ -581,16 +699,95 @@ function BR:BroadcastGuildSettings()
         BlockAuction = self:GetSetting("BlockAuction"),
         BlockMail = self:GetSetting("BlockMail"),
         BlockWarbound = self:GetSetting("BlockWarbound"),
+        BlockCraftingOrders = self:GetSetting("BlockCraftingOrders"),
         MailBlockMode = self:GetSetting("MailBlockMode"),
     }
-    AllforOneDB.GuildSettingsTimestamp = time()
+    AllforOneDB.GuildSettingsFromGM = true
     
-    self:Debug("Guild settings broadcasted")
+    self:Debug("Guild settings broadcasted (Guild Master) - Hash: " .. currentHash)
+end
+
+-- Send settings without changing hash (manual sync button)
+function BR:SendGuildSettings()
+    if not self:IsGuildMaster() then return end
+    self:BroadcastGuildSettings(false) -- Don't force new hash
+    self:Print("Einstellungen an alle Online-Gildenmitglieder gesendet.", "info")
+end
+
+-- Officer can broadcast settings when GM is offline
+function BR:BroadcastGuildSettingsAsOfficer()
+    if not self:IsGuildOfficer() then return end
+    if self:IsGuildMaster() then return end -- GM uses BroadcastGuildSettings
+    if not self:IsInGuild() then return end
+    
+    -- Use stored guild settings and hash
+    local storedSettings = AllforOneDB.GuildSettings
+    local storedHash = self:GetStoredHash()
+    
+    local settings
+    if storedSettings then
+        local mailMode = storedSettings.MailBlockMode or "selective"
+        settings = {
+            storedSettings.BlockTrade and "1" or "0",
+            storedSettings.BlockGroupInvites and "1" or "0",
+            storedSettings.BlockLFG and "1" or "0",
+            storedSettings.BlockAuction and "1" or "0",
+            storedSettings.BlockMail and "1" or "0",
+            storedSettings.BlockWarbound and "1" or "0",
+            storedSettings.BlockCraftingOrders and "1" or "0",
+            mailMode == "full" and "1" or "0",
+            storedHash
+        }
+    else
+        -- No stored settings, use current character settings
+        local currentHash = self:CalculateSettingsHash()
+        local mailMode = self:GetSetting("MailBlockMode") or "selective"
+        settings = {
+            self:GetSetting("BlockTrade") and "1" or "0",
+            self:GetSetting("BlockGroupInvites") and "1" or "0",
+            self:GetSetting("BlockLFG") and "1" or "0",
+            self:GetSetting("BlockAuction") and "1" or "0",
+            self:GetSetting("BlockMail") and "1" or "0",
+            self:GetSetting("BlockWarbound") and "1" or "0",
+            self:GetSetting("BlockCraftingOrders") and "1" or "0",
+            mailMode == "full" and "1" or "0",
+            currentHash
+        }
+    end
+    
+    local msg = "OFFICER_SETTINGS:" .. table.concat(settings, ":")
+    self:SendAddonMessage(msg, "GUILD")
+    
+    self:Debug("Guild settings broadcasted (Officer) - Hash: " .. (storedHash or "none"))
+end
+
+-- Respond to hash request (GM or Officer)
+function BR:RespondToHashRequest(requester)
+    if not self:IsInGuild() then return end
+    
+    local storedHash = self:GetStoredHash()
+    if storedHash == "" then return end -- No hash stored, don't respond
+    
+    local isGM = self:IsGuildMaster() and "1" or "0"
+    local msg = "HASH_RESPONSE:" .. storedHash .. ":" .. isGM
+    self:SendAddonMessage(msg, "WHISPER", requester)
+    
+    self:Debug("Hash response sent to " .. requester .. " - Hash: " .. storedHash)
+end
+
+-- Request hash from guild (called on login)
+function BR:RequestGuildHash()
+    if not self:IsInGuild() then return end
+    if self:IsGuildMaster() then return end -- GM doesn't need to request
+    
+    self:SendAddonMessage("REQUEST_HASH", "GUILD")
+    self:Debug("Requesting hash from guild...")
 end
 
 function BR:RequestGuildSettings()
     if not self:IsInGuild() then return end
     self:SendAddonMessage("REQUEST_SETTINGS", "GUILD")
+    self:Debug("Requesting full settings from guild...")
 end
 
 function BR:BroadcastGuildRules(rules)
@@ -641,19 +838,24 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "PLAYER_LOGIN" then
         BR:EnableModules()
+        
+        -- Reset hash response tracking
+        BR.receivedGMHash = false
+        
         C_Timer.After(3, function()
-            -- Request guild settings from officers
-            BR:RequestGuildSettings()
+            -- Request hash first (more efficient than full settings)
+            -- If hash differs, full settings will be requested automatically
+            BR:RequestGuildHash()
         end)
         C_Timer.After(5, function()
             BR:BroadcastStatus()
-            -- If guild master, also broadcast current settings
+            -- If guild master, also broadcast current settings with hash
             if BR:IsGuildMaster() then
-                BR:BroadcastGuildSettings()
+                BR:BroadcastGuildSettings(true) -- Force hash update on login
             end
         end)
-        -- Ping all guild members after 8 seconds (give time for everything to load)
-        C_Timer.After(8, function()
+        -- Ping all guild members after 15 seconds (give time for everything to load)
+        C_Timer.After(15, function()
             BR:PingGuildMembers()
         end)
         -- Setup periodic status broadcast (heartbeat every 5 minutes)

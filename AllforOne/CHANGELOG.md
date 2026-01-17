@@ -2,6 +2,22 @@
 
 Alle bemerkenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.2] - 2026-01-17
+
+### Neu
+- Briefkasten-Modus kann jetzt zwischen "Komplett blockieren" und "Nur Fremde blockieren" umgestellt werden
+- Kriegsmeutenbank wird jetzt vollständig blockiert (Tab wird ausgeblendet)
+- Unterstützung für Baganator und andere Taschen-Addons bei der Kriegsmeutenbank-Blockierung
+
+### Verbessert
+- Neues, übersichtlicheres Einstellungsfenster
+- Dungeonsuche funktioniert jetzt im Tutorial-Gebiet (Insel der Verbannten)
+- Einstellungen werden schneller zwischen Gildenmitgliedern synchronisiert
+
+### Behoben
+- Lokale Einstellungen (Töne, Willkommensbildschirm) werden jetzt korrekt gespeichert
+- Kriegsmeutenbank: Items können nicht mehr per Rechtsklick eingelagert werden
+
 ## [1.0.1] - 2026-01-17
 
 ### Hinzugefügt

@@ -219,22 +219,14 @@ function WelcomeScreen:CreateFrame()
         StaticPopup_Show("ALLFORONE_COPY_URL")
     end)
     
-    -- Button container - only Einstellungen and Synchronisieren for members
+    -- Button container - only Einstellungen for members
     local btnY = 45
     
     local settingsBtn = CreateGoldBtn(frame, 200, 32, "Einstellungen")
-    settingsBtn:SetPoint("BOTTOM", frame, "BOTTOM", -110, btnY)
+    settingsBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, btnY)
     settingsBtn:SetScript("OnClick", function()
         frame:Hide()
         BR:OpenConfig()
-    end)
-    
-    local syncBtn = CreateGoldBtn(frame, 200, 32, "Synchronisieren")
-    syncBtn:SetPoint("BOTTOM", frame, "BOTTOM", 110, btnY)
-    syncBtn:SetScript("OnClick", function()
-        BR:SendAddonMessage("PING", "GUILD")
-        BR:RequestGuildSettings()
-        BR:Print("Synchronisation gestartet...", "info")
     end)
     
     -- Version info

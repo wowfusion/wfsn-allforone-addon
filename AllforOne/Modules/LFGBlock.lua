@@ -32,8 +32,32 @@ function LFGBlock:Refresh()
     self.enabled = BR:GetSetting("Enabled") and BR:GetSetting("BlockLFG")
 end
 
+function LFGBlock:GetCurrentMapId()
+    local mapId
+    local ok, id = pcall(function() return C_Map.GetBestMapForUnit("player") end)
+    if ok and id then mapId = id end
+    
+    if not mapId then
+        ok, id = pcall(function() return GetCurrentMapAreaID() end)
+        if ok and id then mapId = id end
+    end
+    
+    return mapId
+end
+
 function LFGBlock:ShouldBlock()
-    return self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockLFG")
+    if not (self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockLFG")) then
+        return false
+    end
+    
+    -- Ausnahme: Insel der Verbannten (Exile's Reach) - Tutorial-Gebiet
+    -- Dort muss LFG erlaubt sein für den Tutorial-Dungeon
+    local mapId = self:GetCurrentMapId()
+    if mapId == 1409 then
+        return false
+    end
+    
+    return true
 end
 
 function LFGBlock:SetupHooks()

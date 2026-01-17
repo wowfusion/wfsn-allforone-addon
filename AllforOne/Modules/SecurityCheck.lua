@@ -87,6 +87,10 @@ function SecurityCheck:GetCharData()
     return AllforOneCharDB.SecurityData
 end
 
+-- Threshold for detecting addon was disabled (in seconds)
+-- Higher value to account for long loading screens and multi-PC scenarios
+local INACTIVITY_THRESHOLD = 120
+
 function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local charData = self:GetCharData()
     local charKey = self:GetCharKey()
@@ -100,6 +104,7 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
         charData.totalTimePlayed = totalTimePlayed
         charData.sessionActive = true
         charData.lastUpdate = time()
+        charData.lastRealTime = time()
         BR:Debug("SecurityCheck: First time initialization")
         return
     end
@@ -108,18 +113,38 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local timeDiff = totalTimePlayed - charData.totalTimePlayed
     BR:Debug("SecurityCheck: Time difference: " .. timeDiff .. " seconds")
     
-    -- If time difference is more than 120 seconds, addon was likely disabled
-    -- (allowing some tolerance for loading time, etc.)
-    if timeDiff > 15 then
-        charData.wasDisabled = true
-        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff)
-        BR:Print("WARNUNG: Addon war deaktiviert! Zeitdifferenz: " .. timeDiff .. " Sekunden", "error")
+    -- Multi-PC detection: Check if real-world time passed is reasonable
+    -- If someone plays on PC2, the /played on PC1 won't increase but real time will
+    local realTimePassed = 0
+    if charData.lastRealTime then
+        realTimePassed = time() - charData.lastRealTime
+    end
+    BR:Debug("SecurityCheck: Real time since last update: " .. realTimePassed .. " seconds")
+    
+    -- Only trigger warning if:
+    -- 1. Time difference exceeds threshold AND
+    -- 2. Real-world time passed is less than 24 hours (to handle multi-PC scenarios)
+    --    If real time > 24h, player likely just hasn't played this char in a while
+    local isMultiPCScenario = realTimePassed > 86400 -- 24 hours
+    
+    if timeDiff > INACTIVITY_THRESHOLD and not isMultiPCScenario then
+        -- Additional check: if timeDiff is very large (> 1 hour), it's likely a multi-PC scenario
+        -- where the player was playing on another PC
+        if timeDiff > 3600 then
+            BR:Debug("SecurityCheck: Large time difference detected, likely multi-PC scenario")
+            BR:Print("Hinweis: Große Zeitdifferenz erkannt (" .. math.floor(timeDiff/60) .. " Min). Möglicherweise Multi-PC Nutzung.", "info")
+        else
+            charData.wasDisabled = true
+            BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff)
+            BR:Print("WARNUNG: Addon war deaktiviert! Zeitdifferenz: " .. timeDiff .. " Sekunden", "error")
+        end
     end
     
     -- Update stored time
     charData.totalTimePlayed = totalTimePlayed
     charData.sessionActive = true
     charData.lastUpdate = time()
+    charData.lastRealTime = time()
     self.startServerTime = time()
     
     -- Check if warning should be shown
