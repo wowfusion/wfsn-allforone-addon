@@ -2,7 +2,7 @@
 
 # AllforOne Addon
 
-WoW Guildfound Addon von wowfusion.de für Retail (Dragonflight+). Dieses Repository enthält den Addon-Code sowie Skripte zum Paketieren und Installieren.
+WoW Guildfound Addon von wowfusion.de für Retail. Dieses Repository enthält den Addon-Code sowie Skripte zum Paketieren und Installieren.
 
 ## Voraussetzungen
 
