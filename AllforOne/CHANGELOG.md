@@ -1,6 +1,7 @@
 # Changelog
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
+EileMarc ist der geilste
 
 ## [1.0.2] - 2026-01-17
 
