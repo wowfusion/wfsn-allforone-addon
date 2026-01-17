@@ -19,8 +19,11 @@ local MailBlock = {
 local SENDER_WHITELIST = {
     -- German
     ["postmeister"] = true,
+    ["handwerkerkonsortium"] = true,
     -- English
     ["postmaster"] = true,
+    ["artisan's consortium"] = true,
+    ["artisans consortium"] = true, -- safety net if apostrophes get stripped
     -- System
     -- ["system"] = true,
     -- ["blizzard"] = true,

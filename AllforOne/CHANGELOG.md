@@ -17,6 +17,7 @@ Alle bemerkenswerten Änderungen an diesem Projekt werden in dieser Datei dokume
 ### Behoben
 - Lokale Einstellungen (Töne, Willkommensbildschirm) werden jetzt korrekt gespeichert
 - Kriegsmeutenbank: Items können nicht mehr per Rechtsklick eingelagert werden
+- Post vom Handwerkerkonsortium / Artisan's Consortium wird trotz Block aktiv zugestellt
 
 ## [1.0.1] - 2026-01-17
 
