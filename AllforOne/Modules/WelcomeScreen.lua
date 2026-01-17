@@ -204,9 +204,14 @@ function WelcomeScreen:CreateFrame()
             hasEditBox = true,
             editBoxWidth = 260,
             OnShow = function(self)
-                self.editBox:SetText("https://wowfusion.de/allforone")
-                self.editBox:HighlightText()
-                self.editBox:SetFocus()
+                local editBox = self.editBox or self.EditBox
+                if editBox then
+                    editBox:SetText("https://wowfusion.de/allforone")
+                    editBox:HighlightText()
+                    editBox:SetFocus()
+                else
+                    BR:Debug("WelcomeScreen: StaticPopup editBox missing")
+                end
             end,
             EditBoxOnEnterPressed = function(self)
                 self:GetParent():Hide()
