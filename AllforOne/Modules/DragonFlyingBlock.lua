@@ -113,6 +113,15 @@ function DragonFlyingBlock:ShouldBlock()
     return false
 end
 
+function DragonFlyingBlock:SwitchToSteadyFlight()
+    -- Switch to Steady Flight using CVar
+    if C_CVar and C_CVar.SetCVar then
+        C_CVar.SetCVar("dynamicFlightMountedOption", "0")
+        BR:Notify("Flugstil auf 'Statisch' gewechselt!", "success")
+        BR:Debug("DragonFlyingBlock: Switched to Steady Flight")
+    end
+end
+
 function DragonFlyingBlock:ShowBlockMessage()
     -- Prevent spam (max once per 3 seconds)
     local now = GetTime()
@@ -121,12 +130,20 @@ function DragonFlyingBlock:ShowBlockMessage()
     
     local playerLevel = UnitLevel("player")
     local msg = string.format(
-        "Himmelsreiten ist erst ab Stufe %d erlaubt!\n\nAktuelle Stufe: %d\n\nBitte wechsle auf statisches Fliegen:\nCharakter > Reiten > Flugstil: Statisch",
+        "Himmelsreiten ist erst ab Stufe %d erlaubt!\n\nAktuelle Stufe: %d",
         MAX_LEVEL, playerLevel
     )
     
     if BR.ShowWarningPopup then
-        BR:ShowWarningPopup("Himmelsreiten gesperrt", msg, 5)
+        BR:ShowWarningPopup(
+            "Himmelsreiten gesperrt",
+            msg,
+            nil, -- use default display time
+            "Auf Statisch wechseln",
+            function()
+                DragonFlyingBlock:SwitchToSteadyFlight()
+            end
+        )
     else
         BR:Notify("Himmelsreiten gesperrt - Bitte auf statisches Fliegen wechseln!", "warning")
     end

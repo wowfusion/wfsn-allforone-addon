@@ -19,8 +19,9 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - Unterstützung für Baganator und andere Taschen-Addons bei der Kriegsmeutenbank-Blockierung
 - **Himmelsreiten-Sperre**: Aufmounten wird blockiert wenn "Flugstil: Himmelsreiten" aktiv ist (bis Max-Level)
   - Erkennung basiert auf Buff-IDs (Himmelsreiten: 404464, Statisch: 404468)
-  - Hinweis zum Wechsel auf statisches Fliegen wird angezeigt
+  - Button zum direkten Wechsel auf statisches Fliegen im Popup
   - Ausnahmen für Drachenreit-Quests und Rennen
+- Popup-Meldungen werden jetzt länger angezeigt (+2 Sekunden)
 - Gruppeneinladungen: NPCs (Quest-Begleiter) sind jetzt in Gruppen erlaubt
 
 ### Verbessert
