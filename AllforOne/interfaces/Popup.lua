@@ -85,8 +85,9 @@ function BR.Popup:Show(options)
         -- Use SecureActionButton if spell casting is needed
         if options.buttonSpell then
             buttonFrame = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
-            buttonFrame:SetAttribute("type", "spell")
-            buttonFrame:SetAttribute("spell", options.buttonSpell)
+            buttonFrame:RegisterForClicks("AnyUp", "AnyDown")
+            buttonFrame:SetAttribute("type1", "spell")
+            buttonFrame:SetAttribute("spell1", options.buttonSpell)
             buttonFrame:SetScript("PostClick", function()
                 if options.buttonCallback then
                     options.buttonCallback()
