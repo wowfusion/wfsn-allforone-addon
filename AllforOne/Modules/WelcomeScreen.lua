@@ -59,7 +59,6 @@ local function GetWelcomeMessage()
         table.insert(lines, "- Keine Blockierungen aktiv")
     end
     
-    table.insert(lines, "")
     table.insert(lines, "Viel Spaß beim Spielen!|r")
     
     return table.concat(lines, "\n")
