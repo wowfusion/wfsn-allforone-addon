@@ -65,7 +65,7 @@ function Config:CreateFrame()
     
     local isGuildMaster = BR:IsGuildMaster()
     local isOfficer = BR:IsGuildOfficer()
-    local frameHeight = (isGuildMaster or isOfficer) and 545 or 505
+    local frameHeight = (isGuildMaster or isOfficer) and 615 or 575
     
     -- Main frame
     local frame = CreateFrame("Frame", "AllforOneConfigPanel", UIParent, "BackdropTemplate")
@@ -200,6 +200,42 @@ function Config:CreateFrame()
     
     local debugBox = self:CreateCheckbox(frame, "DebugMode", "Debug-Modus", "")
     debugBox:SetPoint("TOPLEFT", 25, yOffset)
+    
+    yOffset = yOffset - 30
+    
+    -- GuildMap Pin-Größe Slider
+    local pinSizeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pinSizeLabel:SetPoint("TOPLEFT", 25, yOffset)
+    pinSizeLabel:SetText("Gildenkarten Pin-Größe:")
+    
+    local pinSizeValue = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pinSizeValue:SetPoint("LEFT", pinSizeLabel, "RIGHT", 5, 0)
+    
+    local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSlider", frame, "OptionsSliderTemplate")
+    pinSizeSlider:SetPoint("TOPLEFT", 25, yOffset - 18)
+    pinSizeSlider:SetSize(200, 16)
+    pinSizeSlider:SetMinMaxValues(16, 64)
+    pinSizeSlider:SetValueStep(4)
+    pinSizeSlider:SetObeyStepOnDrag(true)
+    pinSizeSlider.Low:SetText("16")
+    pinSizeSlider.High:SetText("64")
+    pinSizeSlider.Text:SetText("")
+    
+    local currentSize = BR:GetSetting("GuildMapPinSize") or 32
+    pinSizeSlider:SetValue(currentSize)
+    pinSizeValue:SetText(currentSize)
+    
+    pinSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        pinSizeValue:SetText(value)
+        BR:SetSetting("GuildMapPinSize", value, true)
+        -- Pins neu zeichnen
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    yOffset = yOffset - 40
     
     -- Bottom separator
     local sep3 = frame:CreateTexture(nil, "ARTWORK")
@@ -602,10 +638,81 @@ local function CreateInterfaceOptionsPanel()
     local welcomeCheck = CreateOptionCheckbox(scrollChild, muteCheck, "Willkommensbildschirm beim Login", "ShowWelcomeOnLogin")
     local debugCheck = CreateOptionCheckbox(scrollChild, welcomeCheck, "Debug-Modus", "DebugMode")
     
+    -- Separator for GuildMap
+    local sepGuildMap = scrollChild:CreateTexture(nil, "ARTWORK")
+    sepGuildMap:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", -10, -15)
+    sepGuildMap:SetSize(500, 1)
+    sepGuildMap:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+    
+    -- GuildMap title
+    local guildMapTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    guildMapTitle:SetPoint("TOPLEFT", sepGuildMap, "BOTTOMLEFT", 10, -10)
+    guildMapTitle:SetText("|cffffffffGildenkarte:|r")
+    
+    -- GuildMap Checkboxes
+    local guildMapEnabledCheck = CreateOptionCheckbox(scrollChild, guildMapTitle, "Gildenkarte aktivieren", "GuildMapEnabled", -5)
+    guildMapEnabledCheck:SetScript("OnClick", function(self)
+        BR:SetSetting("GuildMapEnabled", self:GetChecked(), true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    local guildMapNamesCheck = CreateOptionCheckbox(scrollChild, guildMapEnabledCheck, "Spielernamen anzeigen", "GuildMapShowNames")
+    guildMapNamesCheck:SetScript("OnClick", function(self)
+        BR:SetSetting("GuildMapShowNames", self:GetChecked(), true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    -- GuildMap Pin-Größe Slider
+    local pinSizeRow = CreateFrame("Frame", nil, scrollChild)
+    pinSizeRow:SetSize(400, 50)
+    pinSizeRow:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -10)
+    
+    local pinSizeLabel = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    pinSizeLabel:SetPoint("TOPLEFT", 0, 0)
+    pinSizeLabel:SetText("Gildenkarten Pin-Größe:")
+    
+    local pinSizeValue = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    pinSizeValue:SetPoint("LEFT", pinSizeLabel, "RIGHT", 5, 0)
+    
+    local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSliderOptions", pinSizeRow, "OptionsSliderTemplate")
+    pinSizeSlider:SetPoint("TOPLEFT", pinSizeLabel, "BOTTOMLEFT", 0, -8)
+    pinSizeSlider:SetSize(200, 16)
+    pinSizeSlider:SetMinMaxValues(16, 64)
+    pinSizeSlider:SetValueStep(4)
+    pinSizeSlider:SetObeyStepOnDrag(true)
+    pinSizeSlider.Low:SetText("16")
+    pinSizeSlider.High:SetText("64")
+    pinSizeSlider.Text:SetText("")
+    
+    local currentPinSize = BR:GetSetting("GuildMapPinSize") or 32
+    pinSizeSlider:SetValue(currentPinSize)
+    pinSizeValue:SetText(currentPinSize)
+    
+    pinSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        pinSizeValue:SetText(value)
+        BR:SetSetting("GuildMapPinSize", value, true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    statusLabels["GuildMapPinSize"] = {
+        UpdateDisplay = function()
+            local size = BR:GetSetting("GuildMapPinSize") or 32
+            pinSizeSlider:SetValue(size)
+            pinSizeValue:SetText(size)
+        end
+    }
+    
     -- Send Settings Button (only for Guild Master)
     if isGuildMaster then
         local sep3 = scrollChild:CreateTexture(nil, "ARTWORK")
-        sep3:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", -10, -15)
+        sep3:SetPoint("TOPLEFT", pinSizeRow, "BOTTOMLEFT", -10, -10)
         sep3:SetSize(500, 1)
         sep3:SetColorTexture(0.796, 0.71, 0.482, 0.5)
         
