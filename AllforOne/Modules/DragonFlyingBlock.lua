@@ -2,14 +2,15 @@
 --  All for One - Dragon Flying Block Module
 --  Block mounting while Skyriding is active until max level
 --  Uses buff detection: Skyriding (404464) vs Steady Flight (404468)
+--  Dismounts player immediately if they mount with Skyriding active
 ----------------------------------------------------------------------
 
 local addonName, BR = ...
 
 local DragonFlyingBlock = {
     enabled = false,
-    hooked = false,
     lastBlockTime = 0,
+    wasMounted = false,
 }
 
 -- Flight style buff IDs
@@ -17,7 +18,7 @@ local BUFF_SKYRIDING = 404464      -- Flugstil: Himmelsreiten
 local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 
 -- Max level constant (TWW = 80)
-local MAX_LEVEL = 80
+local MAX_LEVEL = 90
 
 -- Quest IDs related to dragonriding training/races (exceptions)
 local DRAGONRIDING_QUEST_IDS = {
@@ -31,7 +32,6 @@ local RACE_AURAS = {369968, 377234}
 
 function DragonFlyingBlock:OnInitialize()
     BR:Debug("DragonFlyingBlock module initialized")
-    self:SetupHooks()
     self:SetupEvents()
 end
 
@@ -88,7 +88,7 @@ function DragonFlyingBlock:IsInDragonridingException()
     return false
 end
 
-function DragonFlyingBlock:ShouldBlockMount()
+function DragonFlyingBlock:ShouldBlock()
     -- Basic checks
     if not self.enabled then return false end
     if not BR:GetSetting("Enabled") then return false end
@@ -132,74 +132,57 @@ function DragonFlyingBlock:ShowBlockMessage()
     end
 end
 
+function DragonFlyingBlock:CheckAndDismount()
+    -- Called when player mounts - check if we should dismount them
+    if not self:ShouldBlock() then return end
+    
+    -- Player just mounted with Skyriding active - dismount them!
+    if IsMounted() then
+        Dismount()
+        self:ShowBlockMessage()
+        BR:Debug("DragonFlyingBlock: Dismounted player (Skyriding active)")
+    end
+end
+
 function DragonFlyingBlock:SetupEvents()
     local eventFrame = CreateFrame("Frame")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     
-    eventFrame:SetScript("OnEvent", function(_, event, ...)
-        if event == "PLAYER_ENTERING_WORLD" then
-            -- Check on login if Skyriding is active and show reminder
-            C_Timer.After(3, function()
-                if DragonFlyingBlock:ShouldBlockMount() then
-                    DragonFlyingBlock:ShowBlockMessage()
-                end
-            end)
+    -- Track mount state changes
+    eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+    eventFrame:RegisterEvent("UNIT_AURA")
+    
+    eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
+        if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+            -- Player mount state changed
+            local isMounted = IsMounted()
+            
+            -- Only check when transitioning from not mounted to mounted
+            if isMounted and not DragonFlyingBlock.wasMounted then
+                -- Small delay to ensure mount is fully applied
+                C_Timer.After(0.1, function()
+                    DragonFlyingBlock:CheckAndDismount()
+                end)
+            end
+            
+            DragonFlyingBlock.wasMounted = isMounted
+            
+        elseif event == "UNIT_AURA" and unit == "player" then
+            -- Check if player just mounted (backup check via mount buff)
+            if IsMounted() and not DragonFlyingBlock.wasMounted then
+                C_Timer.After(0.1, function()
+                    DragonFlyingBlock:CheckAndDismount()
+                end)
+                DragonFlyingBlock.wasMounted = true
+            elseif not IsMounted() then
+                DragonFlyingBlock.wasMounted = false
+            end
         end
     end)
     
     self.eventFrame = eventFrame
-end
-
-function DragonFlyingBlock:SetupHooks()
-    if self.hooked then return end
-    self.hooked = true
     
-    -- Hook C_MountJournal.SummonByID
-    if C_MountJournal and C_MountJournal.SummonByID then
-        local originalSummonByID = C_MountJournal.SummonByID
-        C_MountJournal.SummonByID = function(mountID, ...)
-            if DragonFlyingBlock:ShouldBlockMount() then
-                DragonFlyingBlock:ShowBlockMessage()
-                return -- Block the mount
-            end
-            return originalSummonByID(mountID, ...)
-        end
-    end
-    
-    -- Hook C_MountJournal.SummonRandomFavorite
-    if C_MountJournal and C_MountJournal.SummonRandomFavorite then
-        local originalSummonRandom = C_MountJournal.SummonRandomFavorite
-        C_MountJournal.SummonRandomFavorite = function(...)
-            if DragonFlyingBlock:ShouldBlockMount() then
-                DragonFlyingBlock:ShowBlockMessage()
-                return -- Block the mount
-            end
-            return originalSummonRandom(...)
-        end
-    end
-    
-    -- Hook UseItemByName (for mount items)
-    if UseItemByName then
-        local originalUseItemByName = UseItemByName
-        _G.UseItemByName = function(itemName, ...)
-            if DragonFlyingBlock:ShouldBlockMount() then
-                -- Check if this is a mount item by trying to get mount info
-                -- For now, block all item usage when Skyriding is active
-                -- This is a broad hook but safer
-                local itemID = C_Item and C_Item.GetItemIDForItemInfo and C_Item.GetItemIDForItemInfo(itemName)
-                if itemID then
-                    local mountID = C_MountJournal and C_MountJournal.GetMountFromItem and C_MountJournal.GetMountFromItem(itemID)
-                    if mountID then
-                        DragonFlyingBlock:ShowBlockMessage()
-                        return
-                    end
-                end
-            end
-            return originalUseItemByName(itemName, ...)
-        end
-    end
-    
-    BR:Debug("DragonFlyingBlock: Hooks installed (buff-based detection)")
+    -- Initialize mount state
+    self.wasMounted = IsMounted()
 end
 
 BR:RegisterModule("DragonFlyingBlock", DragonFlyingBlock)
