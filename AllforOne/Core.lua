@@ -187,6 +187,9 @@ function BR:InitializeDefaults()
         DebugMode = false,
         MuteNotificationSounds = false,
         ShowWelcomeOnLogin = true,
+        GuildMapEnabled = true, -- Gildenkarte aktiviert
+        GuildMapShowNames = true, -- Spielernamen anzeigen
+        GuildMapPinSize = 32, -- Größe der Gildenkarten-Pins (16-64)
     }
     
     for key, value in pairs(defaults) do
@@ -535,6 +538,11 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
             if BR.Modules.SecurityCheck then
                 BR.Modules.SecurityCheck:ResetWarning(sender)
             end
+        end
+    elseif msgType == "GUILDMAP" then
+        -- GuildMap position update
+        if BR.Modules.GuildMap and BR.Modules.GuildMap.HandlePositionMessage then
+            BR.Modules.GuildMap:HandlePositionMessage(message, sender)
         end
     end
 end

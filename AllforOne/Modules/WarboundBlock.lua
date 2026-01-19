@@ -195,54 +195,8 @@ local function InstallHooks()
         end
     end
     
-    -- Hook C_Container.UseContainerItem to block item transfers
-    if C_Container and C_Container.UseContainerItem then
-        originalFunctions.UseContainerItem = C_Container.UseContainerItem
-        C_Container.UseContainerItem = function(containerIndex, slotIndex, unitToken, reagentBankOpen)
-            if ShouldBlock() then
-                -- Block if source is Warbound bank (withdrawing)
-                if IsWarboundBankBag(containerIndex) then
-                    NotifyBlocked("withdraw_item")
-                    BR:Debug("WarboundBlock: Blocked item withdrawal from Warbound bank bag " .. tostring(containerIndex))
-                    return
-                end
-                -- Block if Warbound bank is open and we're depositing from bags
-                if IsWarboundBankOpen() and not IsWarboundBankBag(containerIndex) then
-                    NotifyBlocked("deposit_item")
-                    BR:Debug("WarboundBlock: Blocked item deposit to Warbound bank")
-                    return
-                end
-            end
-            return originalFunctions.UseContainerItem(containerIndex, slotIndex, unitToken, reagentBankOpen)
-        end
-    end
-    
-    -- Hook C_Container.PickupContainerItem
-    if C_Container and C_Container.PickupContainerItem then
-        originalFunctions.PickupContainerItem = C_Container.PickupContainerItem
-        C_Container.PickupContainerItem = function(containerIndex, slotIndex)
-            if ShouldBlock() then
-                -- Block if picking up from Warbound bank
-                if IsWarboundBankBag(containerIndex) then
-                    NotifyBlocked("withdraw_item")
-                    BR:Debug("WarboundBlock: Blocked pickup from Warbound bank bag " .. tostring(containerIndex))
-                    ClearCursor()
-                    return
-                end
-                -- Block if placing item INTO Warbound bank (cursor has item, target is Warbound bag)
-                if CursorHasItem() and IsWarboundBankOpen() then
-                    -- This is attempting to place cursor item into Warbound bank
-                    if IsWarboundBankBag(containerIndex) then
-                        NotifyBlocked("deposit_item")
-                        BR:Debug("WarboundBlock: Blocked deposit via PickupContainerItem to bag " .. tostring(containerIndex))
-                        ClearCursor()
-                        return
-                    end
-                end
-            end
-            return originalFunctions.PickupContainerItem(containerIndex, slotIndex)
-        end
-    end
+    -- NOTE: C_Container.UseContainerItem and PickupContainerItem are protected functions
+    -- and cannot be hooked. Item blocking is handled via UI overlays instead.
     
     -- Hook C_Bank.DepositItem to block direct deposits
     if C_Bank and C_Bank.DepositItem then
