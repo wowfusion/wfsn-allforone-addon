@@ -114,12 +114,26 @@ function DragonFlyingBlock:ShouldBlock()
 end
 
 function DragonFlyingBlock:SwitchToSteadyFlight()
-    -- Switch to Steady Flight using CVar
-    if C_CVar and C_CVar.SetCVar then
-        C_CVar.SetCVar("dynamicFlightMountedOption", "0")
-        BR:Notify("Flugstil auf 'Statisch' gewechselt!", "success")
+    -- Delay to ensure player is fully dismounted first
+    C_Timer.After(0.3, function()
+        -- Method 1: Use CVar
+        if C_CVar and C_CVar.SetCVar then
+            C_CVar.SetCVar("dynamicFlightMountedOption", "0")
+            BR:Debug("DragonFlyingBlock: Set CVar dynamicFlightMountedOption=0")
+        end
+        
+        -- Method 2: Cast the Switch Flight Style spell (436854) if Skyriding is active
+        -- This spell toggles between Skyriding and Steady Flight
+        if DragonFlyingBlock:HasSkyridingBuff() then
+            local spellID = 436854 -- Switch Flight Style
+            if C_Spell and C_Spell.CastSpellByID then
+                C_Spell.CastSpellByID(spellID)
+                BR:Debug("DragonFlyingBlock: Cast Switch Flight Style spell")
+            end
+        end
+        
         BR:Debug("DragonFlyingBlock: Switched to Steady Flight")
-    end
+    end)
 end
 
 function DragonFlyingBlock:ShowBlockMessage()
