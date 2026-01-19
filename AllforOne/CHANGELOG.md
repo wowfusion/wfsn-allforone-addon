@@ -17,9 +17,9 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - Briefkasten-Modus kann jetzt zwischen "Komplett blockieren" und "Nur Fremde blockieren" umgestellt werden
 - Kriegsmeutenbank wird jetzt vollständig blockiert (Tab wird ausgeblendet)
 - Unterstützung für Baganator und andere Taschen-Addons bei der Kriegsmeutenbank-Blockierung
-- **Drachenfliegen-Sperre**: Dynamisches Fliegen (Skyriding) kann bis Max-Level blockiert werden
-  - Statisches Fliegen bleibt erlaubt
-  - Automatischer Wechsel auf statisches Fliegen beim Aufmounten
+- **Himmelsreiten-Sperre**: Aufmounten wird blockiert wenn "Flugstil: Himmelsreiten" aktiv ist (bis Max-Level)
+  - Erkennung basiert auf Buff-IDs (Himmelsreiten: 404464, Statisch: 404468)
+  - Hinweis zum Wechsel auf statisches Fliegen wird angezeigt
   - Ausnahmen für Drachenreit-Quests und Rennen
 - Gruppeneinladungen: NPCs (Quest-Begleiter) sind jetzt in Gruppen erlaubt
 
