@@ -79,25 +79,51 @@ function BR.Popup:Show(options)
     
     -- Button (optional)
     local buttonFrame
-    if options.buttonText and options.buttonCallback then
+    if options.buttonText then
         yOffset = yOffset - messageText:GetStringHeight() - 12
         
-        buttonFrame = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        buttonFrame:SetSize(180, 26)
-        buttonFrame:SetPoint("TOP", frame, "TOP", 0, yOffset)
-        buttonFrame:SetText(options.buttonText)
-        buttonFrame:SetScript("OnClick", function()
-            options.buttonCallback()
-            -- Close popup after button click
-            frame:Hide()
-            frame:SetParent(nil)
-            for i, popup in ipairs(BR.Popup.activePopups) do
-                if popup == frame then
-                    table.remove(BR.Popup.activePopups, i)
-                    break
+        -- Use SecureActionButton if spell casting is needed
+        if options.buttonSpell then
+            buttonFrame = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+            buttonFrame:SetAttribute("type", "spell")
+            buttonFrame:SetAttribute("spell", options.buttonSpell)
+            buttonFrame:SetScript("PostClick", function()
+                if options.buttonCallback then
+                    options.buttonCallback()
                 end
-            end
-        end)
+                -- Close popup after button click
+                C_Timer.After(0.1, function()
+                    frame:Hide()
+                    frame:SetParent(nil)
+                    for i, popup in ipairs(BR.Popup.activePopups) do
+                        if popup == frame then
+                            table.remove(BR.Popup.activePopups, i)
+                            break
+                        end
+                    end
+                end)
+            end)
+        elseif options.buttonCallback then
+            buttonFrame = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+            buttonFrame:SetScript("OnClick", function()
+                options.buttonCallback()
+                -- Close popup after button click
+                frame:Hide()
+                frame:SetParent(nil)
+                for i, popup in ipairs(BR.Popup.activePopups) do
+                    if popup == frame then
+                        table.remove(BR.Popup.activePopups, i)
+                        break
+                    end
+                end
+            end)
+        end
+        
+        if buttonFrame then
+            buttonFrame:SetSize(180, 26)
+            buttonFrame:SetPoint("TOP", frame, "TOP", 0, yOffset)
+            buttonFrame:SetText(options.buttonText)
+        end
     end
     
     -- Adjust frame height based on content
@@ -153,7 +179,7 @@ end
 ----------------------------------------------------------------------
 --  Convenience Methods
 ----------------------------------------------------------------------
-function BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback)
+function BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
     return self:Show({
         title = title,
         message = message,
@@ -163,7 +189,8 @@ function BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCal
         displayTime = displayTime or 7,
         playSound = BR.Sounds.Warning,
         buttonText = buttonText,
-        buttonCallback = buttonCallback
+        buttonCallback = buttonCallback,
+        buttonSpell = buttonSpell
     })
 end
 
@@ -222,8 +249,8 @@ function BR:ShowPopup(options)
     return BR.Popup:Show(options)
 end
 
-function BR:ShowWarningPopup(title, message, displayTime, buttonText, buttonCallback)
-    return BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback)
+function BR:ShowWarningPopup(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
+    return BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
 end
 
 function BR:ShowErrorPopup(title, message, displayTime)

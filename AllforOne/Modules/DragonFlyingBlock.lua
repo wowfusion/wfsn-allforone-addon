@@ -113,27 +113,28 @@ function DragonFlyingBlock:ShouldBlock()
     return false
 end
 
+-- Create a secure button for casting Switch Flight Style
+local switchFlightButton
+function DragonFlyingBlock:GetOrCreateSwitchButton()
+    if switchFlightButton then return switchFlightButton end
+    
+    -- Create secure action button that can cast spells
+    switchFlightButton = CreateFrame("Button", "AllforOneSwitchFlightButton", UIParent, "SecureActionButtonTemplate")
+    switchFlightButton:SetAttribute("type", "spell")
+    switchFlightButton:SetAttribute("spell", "Flugstil wechseln") -- German spell name
+    switchFlightButton:Hide()
+    
+    BR:Debug("DragonFlyingBlock: Created secure switch flight button")
+    return switchFlightButton
+end
+
 function DragonFlyingBlock:SwitchToSteadyFlight()
-    -- Delay to ensure player is fully dismounted first
-    C_Timer.After(0.3, function()
-        -- Method 1: Use CVar
-        if C_CVar and C_CVar.SetCVar then
-            C_CVar.SetCVar("dynamicFlightMountedOption", "0")
-            BR:Debug("DragonFlyingBlock: Set CVar dynamicFlightMountedOption=0")
-        end
-        
-        -- Method 2: Cast the Switch Flight Style spell (436854) if Skyriding is active
-        -- This spell toggles between Skyriding and Steady Flight
-        if DragonFlyingBlock:HasSkyridingBuff() then
-            local spellID = 436854 -- Switch Flight Style
-            if C_Spell and C_Spell.CastSpellByID then
-                C_Spell.CastSpellByID(spellID)
-                BR:Debug("DragonFlyingBlock: Cast Switch Flight Style spell")
-            end
-        end
-        
-        BR:Debug("DragonFlyingBlock: Switched to Steady Flight")
-    end)
+    -- Set CVar as backup
+    if C_CVar and C_CVar.SetCVar then
+        C_CVar.SetCVar("dynamicFlightMountedOption", "0")
+        BR:Debug("DragonFlyingBlock: Set CVar dynamicFlightMountedOption=0")
+    end
+    BR:Debug("DragonFlyingBlock: CVar set - player needs to use spell to fully switch")
 end
 
 function DragonFlyingBlock:ShowBlockMessage()
@@ -156,7 +157,8 @@ function DragonFlyingBlock:ShowBlockMessage()
             "Auf Statisch wechseln",
             function()
                 DragonFlyingBlock:SwitchToSteadyFlight()
-            end
+            end,
+            "Flugstil wechseln" -- Spell name for SecureActionButton
         )
     else
         BR:Notify("Himmelsreiten gesperrt - Bitte auf statisches Fliegen wechseln!", "warning")
