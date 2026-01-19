@@ -18,7 +18,7 @@ local BUFF_SKYRIDING = 404464      -- Flugstil: Himmelsreiten
 local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 
 -- Max level constant (TWW = 80)
-local MAX_LEVEL = 90
+local MAX_LEVEL = 80
 
 -- Quest IDs related to dragonriding training/races (exceptions)
 local DRAGONRIDING_QUEST_IDS = {
