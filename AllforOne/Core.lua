@@ -585,7 +585,7 @@ function BR:HandleGuildSettings(message, sender)
     local isFromGuildMaster = parts[1] == "GUILD_SETTINGS"
     local isFromOfficer = parts[1] == "OFFICER_SETTINGS"
     
-    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):hash
+    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):BlockDragonFlying:hash
     local settings = {
         BlockTrade = parts[2] == "1",
         BlockGroupInvites = parts[3] == "1",
@@ -595,8 +595,9 @@ function BR:HandleGuildSettings(message, sender)
         BlockWarbound = parts[7] == "1",
         BlockCraftingOrders = parts[8] == "1",
         MailBlockMode = parts[9] == "1" and "full" or "selective",
+        BlockDragonFlying = parts[10] == "1",
     }
-    local receivedHash = parts[10] or ""
+    local receivedHash = parts[11] or ""
     
     -- Priority logic:
     -- 1. Guild Master settings ALWAYS override everything
@@ -633,7 +634,8 @@ function BR:HandleGuildSettings(message, sender)
         if not self:IsGuildMaster() then
             local guildSyncedSettings = {
                 "BlockTrade", "BlockGroupInvites", "BlockLFG", "BlockAuction",
-                "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode"
+                "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode",
+                "BlockDragonFlying"
             }
             for _, key in ipairs(guildSyncedSettings) do
                 if settings[key] ~= nil then
@@ -658,6 +660,7 @@ function BR:CalculateSettingsHash()
         self:GetSetting("BlockWarbound") and "1" or "0",
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
+        self:GetSetting("BlockDragonFlying") and "1" or "0",
     }
     return table.concat(hashParts, "")
 end
@@ -693,6 +696,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         self:GetSetting("BlockWarbound") and "1" or "0",
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
+        self:GetSetting("BlockDragonFlying") and "1" or "0",
         currentHash
     }
     
@@ -709,6 +713,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         BlockWarbound = self:GetSetting("BlockWarbound"),
         BlockCraftingOrders = self:GetSetting("BlockCraftingOrders"),
         MailBlockMode = self:GetSetting("MailBlockMode"),
+        BlockDragonFlying = self:GetSetting("BlockDragonFlying"),
     }
     AllforOneDB.GuildSettingsFromGM = true
     
@@ -744,6 +749,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             storedSettings.BlockWarbound and "1" or "0",
             storedSettings.BlockCraftingOrders and "1" or "0",
             mailMode == "full" and "1" or "0",
+            storedSettings.BlockDragonFlying and "1" or "0",
             storedHash
         }
     else
@@ -759,6 +765,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             self:GetSetting("BlockWarbound") and "1" or "0",
             self:GetSetting("BlockCraftingOrders") and "1" or "0",
             mailMode == "full" and "1" or "0",
+            self:GetSetting("BlockDragonFlying") and "1" or "0",
             currentHash
         }
     end

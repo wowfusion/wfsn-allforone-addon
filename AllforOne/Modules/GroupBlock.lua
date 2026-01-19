@@ -198,7 +198,8 @@ function GroupBlock:HookGroupEvents()
     self.eventFrame = eventFrame
 end
 
--- Check all group members and leave if non-guild member is present
+-- Check all group members and leave if non-guild member PLAYER is present
+-- NPCs are allowed in the group (e.g. quest NPCs, followers)
 function GroupBlock:CheckGroupMembers()
     if not IsInGroup() then return end
     if IsInRaid() then return end -- Don't check raids
@@ -209,26 +210,31 @@ function GroupBlock:CheckGroupMembers()
     for i = 1, numMembers do
         local unit = "party" .. i
         if UnitExists(unit) then
-            local name = UnitName(unit)
-            if name and name ~= UnitName("player") then
-                local fullName = name
-                local realm = GetRealmName()
-                local unitRealm = select(2, UnitName(unit))
-                if unitRealm and unitRealm ~= "" then
-                    fullName = name .. "-" .. unitRealm
-                end
-                
-                if not self:IsGuildMember(name) and not self:IsGuildMember(fullName) then
-                    -- Non-guild member found - leave group
-                    C_Timer.After(0.5, function()
-                        if BR.ShowWarningPopup then
-                            BR:ShowWarningPopup("Gruppe verlassen", name .. " ist kein Gildenmitglied!\nGruppe wird automatisch verlassen.", 4)
-                        end
-                        C_Timer.After(1, function()
-                            C_PartyInfo.LeaveParty()
+            -- Skip NPCs - only check players
+            if not UnitIsPlayer(unit) then
+                BR:Debug("GroupBlock: Skipping NPC in party: " .. (UnitName(unit) or "unknown"))
+            else
+                local name = UnitName(unit)
+                if name and name ~= UnitName("player") then
+                    local fullName = name
+                    local realm = GetRealmName()
+                    local unitRealm = select(2, UnitName(unit))
+                    if unitRealm and unitRealm ~= "" then
+                        fullName = name .. "-" .. unitRealm
+                    end
+                    
+                    if not self:IsGuildMember(name) and not self:IsGuildMember(fullName) then
+                        -- Non-guild member player found - leave group
+                        C_Timer.After(0.5, function()
+                            if BR.ShowWarningPopup then
+                                BR:ShowWarningPopup("Gruppe verlassen", name .. " ist kein Gildenmitglied!\nGruppe wird automatisch verlassen.", 4)
+                            end
+                            C_Timer.After(1, function()
+                                C_PartyInfo.LeaveParty()
+                            end)
                         end)
-                    end)
-                    return
+                        return
+                    end
                 end
             end
         end

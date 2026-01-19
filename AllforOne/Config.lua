@@ -560,6 +560,7 @@ local function CreateInterfaceOptionsPanel()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
+        {key = "BlockDragonFlying", label = "Drachenfliegen bis Max-Level blockieren"},
     }
     
     for _, setting in ipairs(settings) do

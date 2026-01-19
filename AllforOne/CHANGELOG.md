@@ -2,7 +2,7 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
-## [1.0.3] - 2026-01-17
+## [1.0.2] - 2026-01-17
 
 ### Neu
 - **Gildenkarte**: Zeigt die Positionen aller Gildenmitglieder auf der Weltkarte an
@@ -13,12 +13,15 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
   - Pins werden immer über dem eigenen Spielerpfeil angezeigt
   - **Pin-Größe einstellbar** in den Optionen (16-64 Pixel)
 
-## [1.0.2] - 2026-01-17
-
-### Neu
+### Sonstige Änderungen:
 - Briefkasten-Modus kann jetzt zwischen "Komplett blockieren" und "Nur Fremde blockieren" umgestellt werden
 - Kriegsmeutenbank wird jetzt vollständig blockiert (Tab wird ausgeblendet)
 - Unterstützung für Baganator und andere Taschen-Addons bei der Kriegsmeutenbank-Blockierung
+- **Drachenfliegen-Sperre**: Dynamisches Fliegen (Skyriding) kann bis Max-Level blockiert werden
+  - Statisches Fliegen bleibt erlaubt
+  - Automatischer Wechsel auf statisches Fliegen beim Aufmounten
+  - Ausnahmen für Drachenreit-Quests und Rennen
+- Gruppeneinladungen: NPCs (Quest-Begleiter) sind jetzt in Gruppen erlaubt
 
 ### Verbessert
 - Neues, übersichtlicheres Einstellungsfenster
