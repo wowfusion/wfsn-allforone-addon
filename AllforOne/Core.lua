@@ -183,6 +183,7 @@ function BR:InitializeDefaults()
         BlockMail = true,
         BlockCraftingOrders = true,
         BlockWarbound = true,
+        BlockDragonFlying = true,
         MailBlockMode = "selective", -- "full" or "selective"
         DebugMode = false,
         MuteNotificationSounds = false,
