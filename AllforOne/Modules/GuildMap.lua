@@ -2,9 +2,14 @@
 --  All for One - GuildMap Module
 --  Zeigt Gildenmitglieder auf der Weltkarte an
 --  Basiert auf dem Classic GuildMap Addon, angepasst für Retail 11.2.7
+--  Verwendet HereBeDragons-Pins-2.0 für korrekte Minimap-Positionierung
 ----------------------------------------------------------------------
 
 local addonName, BR = ...
+
+-- HereBeDragons Libraries
+local HBD = LibStub("HereBeDragons-2.0", true)
+local HBDPins = LibStub("HereBeDragons-Pins-2.0", true)
 
 local GuildMap = {
     pins = {},
@@ -397,38 +402,8 @@ function GuildMap:UpdateMeetingPointPin()
 end
 
 ----------------------------------------------------------------------
---  Minimap Gildentreffpunkt Pin (basierend auf HereBeDragons Logik)
+--  Minimap Gildentreffpunkt Pin (mit HereBeDragons-Pins-2.0)
 ----------------------------------------------------------------------
-
--- Minimap Radius Tabelle für verschiedene Zoom-Stufen (aus HereBeDragons)
-local MINIMAP_SIZE = {
-    indoor = { [0] = 300, [1] = 240, [2] = 180, [3] = 120, [4] = 80, [5] = 50 },
-    outdoor = { [0] = 466.67, [1] = 400, [2] = 333.33, [3] = 266.67, [4] = 200, [5] = 133.33 },
-}
-
--- Cache für Weltkoordinaten des Treffpunkts
-local meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
-
-local function GetMeetingPointWorldCoords()
-    if meetingPointWorldX then
-        return meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
-    end
-    
-    -- Konvertiere Map-Koordinaten zu Weltkoordinaten
-    local instanceID, worldPos = C_Map.GetWorldPosFromMapPos(
-        GUILD_MEETING_POINT.mapID, 
-        CreateVector2D(GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y)
-    )
-    
-    if instanceID and worldPos then
-        meetingPointWorldX = worldPos.x
-        meetingPointWorldY = worldPos.y
-        meetingPointInstanceID = instanceID
-        return meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
-    end
-    
-    return nil, nil, nil
-end
 
 function GuildMap:CreateMinimapPin()
     if self.minimapPin then return self.minimapPin end
@@ -436,9 +411,9 @@ function GuildMap:CreateMinimapPin()
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
     pin:SetSize(20, 20)
     pin:SetFrameStrata("MEDIUM")
-    pin:SetFrameLevel(100)
+    pin:SetFrameLevel(Minimap:GetFrameLevel() + 5)
     
-    -- AFO Icon (PNG wird von WoW nicht direkt unterstützt, TGA verwenden)
+    -- AFO Icon
     local icon = pin:CreateTexture(nil, "ARTWORK")
     icon:SetTexture(GUILD_MEETING_POINT.icon)
     icon:SetAllPoints()
@@ -465,89 +440,32 @@ end
 function GuildMap:UpdateMinimapPin()
     local pin = self:CreateMinimapPin()
     
-    -- Hole Weltkoordinaten des Treffpunkts
-    local targetX, targetY, targetInstanceID = GetMeetingPointWorldCoords()
-    if not targetX then
+    -- Prüfe ob HereBeDragons verfügbar ist
+    if not HBDPins then
+        BR:Debug("GuildMap: HereBeDragons-Pins nicht verfügbar")
         pin:Hide()
         return
     end
     
-    -- Hole aktuelle Spieler-Weltkoordinaten
-    local mapID = C_Map.GetBestMapForUnit("player")
-    if not mapID then
-        pin:Hide()
-        return
+    -- Entferne vorherigen Pin falls vorhanden
+    HBDPins:RemoveMinimapIcon("AllforOneMeetingPoint", pin)
+    
+    -- Füge Pin mit HereBeDragons hinzu (floatOnEdge = true)
+    HBDPins:AddMinimapIconMap(
+        "AllforOneMeetingPoint",  -- Owner ID
+        pin,                       -- Frame
+        GUILD_MEETING_POINT.mapID, -- Map ID
+        GUILD_MEETING_POINT.x,     -- X (0-1)
+        GUILD_MEETING_POINT.y,     -- Y (0-1)
+        true                       -- floatOnEdge
+    )
+end
+
+function GuildMap:RemoveMinimapPin()
+    if self.minimapPin and HBDPins then
+        HBDPins:RemoveMinimapIcon("AllforOneMeetingPoint", self.minimapPin)
+        self.minimapPin:Hide()
     end
-    
-    local playerPos = C_Map.GetPlayerMapPosition(mapID, "player")
-    if not playerPos then
-        pin:Hide()
-        return
-    end
-    
-    local playerInstanceID, playerWorldPos = C_Map.GetWorldPosFromMapPos(mapID, playerPos)
-    if not playerInstanceID or not playerWorldPos then
-        pin:Hide()
-        return
-    end
-    
-    -- Prüfe ob im gleichen Instance (Kontinent)
-    if playerInstanceID ~= targetInstanceID then
-        pin:Hide()
-        return
-    end
-    
-    local playerX, playerY = playerWorldPos.x, playerWorldPos.y
-    
-    -- Berechne Distanz in Weltkoordinaten (yards)
-    -- Richtung: vom Spieler ZUM Ziel (nicht umgekehrt!)
-    local dx = targetX - playerX
-    local dy = targetY - playerY
-    
-    -- Hole Minimap Radius (in yards)
-    local mapRadius
-    if C_Minimap and C_Minimap.GetViewRadius then
-        mapRadius = C_Minimap.GetViewRadius()
-    else
-        -- Fallback für ältere Versionen
-        local zoom = Minimap:GetZoom()
-        local indoors = GetCVar("minimapZoom") == tostring(zoom) and "outdoor" or "indoor"
-        mapRadius = (MINIMAP_SIZE[indoors][zoom] or 200) / 2
-    end
-    
-    -- Minimap Dimensionen
-    local minimapWidth = Minimap:GetWidth() / 2
-    local minimapHeight = Minimap:GetHeight() / 2
-    
-    -- Skaliere Weltdistanz auf Minimap-Pixel
-    local diffX = dx / mapRadius
-    local diffY = dy / mapRadius
-    
-    -- Berücksichtige Minimap-Rotation falls aktiviert
-    if GetCVar("rotateMinimap") == "1" then
-        local facing = GetPlayerFacing()
-        if facing then
-            local sinFacing = math.sin(facing)
-            local cosFacing = math.cos(facing)
-            local rotX = diffX * cosFacing - diffY * sinFacing
-            local rotY = diffX * sinFacing + diffY * cosFacing
-            diffX, diffY = rotX, rotY
-        end
-    end
-    
-    -- Berechne Distanz vom Zentrum (normalisiert)
-    local dist = math.sqrt(diffX * diffX + diffY * diffY) / 0.9
-    
-    -- Float on edge wenn außerhalb
-    if dist > 1 then
-        diffX = diffX / dist
-        diffY = diffY / dist
-    end
-    
-    -- Position auf der Minimap setzen
-    pin:ClearAllPoints()
-    pin:SetPoint("CENTER", Minimap, "CENTER", diffX * minimapWidth, -diffY * minimapHeight)
-    pin:Show()
 end
 
 ----------------------------------------------------------------------
@@ -784,10 +702,8 @@ function GuildMap:OnDisable()
     -- Alle Pins verstecken
     self:HideAllPins()
     
-    -- Minimap Pin verstecken
-    if self.minimapPin then
-        self.minimapPin:Hide()
-    end
+    -- Minimap Pin entfernen
+    self:RemoveMinimapPin()
     
     BR:Debug("GuildMap module disabled")
 end

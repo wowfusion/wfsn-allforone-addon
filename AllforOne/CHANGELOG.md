@@ -2,6 +2,28 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.3] - 2026-01-22
+
+### Neu
+- **Gildentreffpunkt auf Minimap**: Der Gildentreffpunkt wird jetzt auch auf der Minimap angezeigt
+  - Verwendet HereBeDragons Library für korrekte Positionierung
+  - Icon bleibt am Rand sichtbar wenn außerhalb des Minimap-Bereichs
+  - Unterstützt Minimap-Rotation
+- **Einstellungen zurücksetzen**: Neuer Button in den Addon-Optionen
+  - Setzt alle Einstellungen auf Standardwerte zurück
+  - Synchronisiert automatisch mit Gildenmeister/Offizier wenn online
+
+### Verbessert
+- **Erweiterte Einstellungs-Verschlüsselung**: Zusätzliche Schutzmaßnahmen
+  - Briefkasten-Modus wird jetzt ebenfalls verschlüsselt
+  - Spielzeit-Daten (totalTimePlayed) sind geschützt
+  - Geschützte Variablen werden sortiert gespeichert
+- **Gildentreffpunkt Icon**: Neues verbessertes Icon (icon2-allforone)
+
+### Behoben
+- Minimap-Pin für Gildentreffpunkt bewegt sich nicht mehr mit dem Spieler
+- Korrektes Icon für Gildentreffpunkt auf Welt- und Minikarte
+
 ## [1.0.2] - 2026-01-17
 
 ### Neu

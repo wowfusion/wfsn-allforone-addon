@@ -20,6 +20,7 @@ local KEY_MAP = {
     BlockCraftingOrders = "_n2b4",
     BlockWarbound = "_v6c0",
     BlockDragonFlying = "_z9a5",
+    MailBlockMode = "_f2x7",
 }
 
 -- Reverse Mapping für Deobfuscation
@@ -42,6 +43,16 @@ local VALUE_MAP = {
     BlockDragonFlying = { t = "A7_D1", f = "B3_D0" },
 }
 
+-- MailBlockMode Werte-Mapping (String statt Boolean)
+local MAILMODE_MAP = {
+    full = "X4_F",
+    selective = "X4_S",
+}
+local REVERSE_MAILMODE_MAP = {
+    ["X4_F"] = "full",
+    ["X4_S"] = "selective",
+}
+
 -- Liste aller geschützten Settings
 local PROTECTED_SETTINGS = {
     "Enabled",
@@ -53,7 +64,21 @@ local PROTECTED_SETTINGS = {
     "BlockCraftingOrders",
     "BlockWarbound",
     "BlockDragonFlying",
+    "MailBlockMode",
 }
+
+-- Security Data Keys die geschützt werden
+local SECURITY_KEY_MAP = {
+    totalTimePlayed = "_s1tp",
+    lastUpdate = "_s2lu",
+    lastRealTime = "_s3rt",
+    sessionActive = "_s4sa",
+    wasDisabled = "_s5wd",
+}
+local REVERSE_SECURITY_KEY_MAP = {}
+for original, obfuscated in pairs(SECURITY_KEY_MAP) do
+    REVERSE_SECURITY_KEY_MAP[obfuscated] = original
+end
 
 ----------------------------------------------------------------------
 --  Hilfsfunktionen
@@ -107,20 +132,36 @@ function SettingsProtection:ObfuscateSettings()
     
     for _, settingName in ipairs(PROTECTED_SETTINGS) do
         local value = AllforOneCharDB[settingName]
-        if type(value) == "boolean" then
-            local obfuscatedKey = KEY_MAP[settingName]
+        local obfuscatedKey = KEY_MAP[settingName]
+        
+        if settingName == "MailBlockMode" then
+            -- MailBlockMode ist ein String
+            if type(value) == "string" and MAILMODE_MAP[value] then
+                AllforOneCharDB[settingName] = nil
+                AllforOneCharDB[obfuscatedKey] = MAILMODE_MAP[value]
+            end
+        elseif type(value) == "boolean" then
             local obfuscatedValue = ObfuscateBoolean(value, settingName)
-            
-            -- Entferne Original-Key und setze verschleierten Key
             AllforOneCharDB[settingName] = nil
             AllforOneCharDB[obfuscatedKey] = obfuscatedValue
         end
     end
     
-    -- Version markieren
-    AllforOneCharDB._pv = 4 -- Version 4 = statische Verschlüsselung
+    -- SecurityData verschleiern
+    if AllforOneCharDB.SecurityData then
+        local obfSecData = {}
+        for key, value in pairs(AllforOneCharDB.SecurityData) do
+            local obfKey = SECURITY_KEY_MAP[key] or key
+            obfSecData[obfKey] = value
+        end
+        AllforOneCharDB.SecurityData = nil
+        AllforOneCharDB._sd = obfSecData
+    end
     
-    BR:Debug("SettingsProtection: Settings verschleiert (v4)")
+    -- Version markieren
+    AllforOneCharDB._pv = 5 -- Version 5 = SecurityData + MailBlockMode
+    
+    BR:Debug("SettingsProtection: Settings verschleiert (v5)")
 end
 
 -- Entschlüsselt alle geschützten Settings beim Laden
@@ -129,23 +170,39 @@ function SettingsProtection:DeobfuscateSettings()
     
     local version = AllforOneCharDB._pv or AllforOneCharDB._v or 1
     
-    -- Version 4: Statische Verschlüsselung
+    -- Version 4+: Statische Verschlüsselung
     if version >= 4 then
         for obfuscatedKey, settingName in pairs(REVERSE_KEY_MAP) do
             local value = AllforOneCharDB[obfuscatedKey]
             if value ~= nil then
-                local deobfuscated = DeobfuscateBoolean(value, settingName)
-                if deobfuscated ~= nil then
-                    AllforOneCharDB[settingName] = deobfuscated
+                if settingName == "MailBlockMode" then
+                    -- MailBlockMode ist ein String
+                    local deobfuscated = REVERSE_MAILMODE_MAP[value]
+                    AllforOneCharDB[settingName] = deobfuscated or "selective"
                 else
-                    -- Manipulation erkannt - Standardwert setzen
-                    AllforOneCharDB[settingName] = true
-                    BR:Debug("SettingsProtection: " .. settingName .. " reset (manipulation)")
+                    local deobfuscated = DeobfuscateBoolean(value, settingName)
+                    if deobfuscated ~= nil then
+                        AllforOneCharDB[settingName] = deobfuscated
+                    else
+                        AllforOneCharDB[settingName] = true
+                        BR:Debug("SettingsProtection: " .. settingName .. " reset (manipulation)")
+                    end
                 end
-                -- Entferne verschleierten Key
                 AllforOneCharDB[obfuscatedKey] = nil
             end
         end
+        
+        -- SecurityData entschlüsseln (Version 5+)
+        if AllforOneCharDB._sd then
+            local secData = {}
+            for obfKey, value in pairs(AllforOneCharDB._sd) do
+                local realKey = REVERSE_SECURITY_KEY_MAP[obfKey] or obfKey
+                secData[realKey] = value
+            end
+            AllforOneCharDB._sd = nil
+            AllforOneCharDB.SecurityData = secData
+        end
+        
         -- Cleanup
         AllforOneCharDB._pv = nil
     else

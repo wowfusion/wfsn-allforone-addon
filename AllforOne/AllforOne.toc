@@ -3,12 +3,18 @@
 ## Notes: Guildfound Addon für WoW Retail - wowfusion.de
 ## Notes-deDE: Guildfound Addon für WoW Retail - wowfusion.de
 ## Author: wowfusion.de
-## Version: 1.0.2
+## Version: 1.0.3
 ## SavedVariables: AllforOneDB
 ## SavedVariablesPerCharacter: AllforOneCharDB
 ## IconTexture: Interface\AddOns\AllforOne\media\icon-allforone.png
 
 ## X-Website: https://wowfusion.de
+
+# Libraries
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\HereBeDragons\HereBeDragons-2.0.lua
+Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 
 # Constants and Core
 Constants.lua
