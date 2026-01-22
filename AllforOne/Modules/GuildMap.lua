@@ -391,9 +391,8 @@ function GuildMap:UpdateMeetingPointPin()
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
     
-    -- Konstante Pin-Größe wie HandyNotes (SetScalingLimits 1.0-1.2)
-    -- Pin bleibt visuell konstant unabhängig vom Zoom
-    local baseSize = 32 -- Feste Größe in Pixeln
+    -- Feste Pin-Größe unabhängig vom Zoom
+    local baseSize = 48 -- Größere feste Größe in Pixeln
     pin:SetSize(baseSize, baseSize)
     
     local pinX = displayX * width
@@ -411,15 +410,15 @@ end
 function GuildMap:CreateMinimapPin()
     if self.minimapPin then return self.minimapPin end
     
-    -- Sehr niedriges FrameLevel + BACKGROUND Strata damit Spieler-Pfeil darüber ist
+    -- LOW Strata mit niedrigem FrameLevel - sichtbar aber unter Spielerpfeil
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
     pin:SetSize(20, 20)
-    pin:SetFrameStrata("BACKGROUND")
-    pin:SetFrameLevel(1)
+    pin:SetFrameStrata("LOW")
+    pin:SetFrameLevel(2)
     pin:EnableMouse(true)
     
-    -- AFO Icon (OVERLAY Layer wie HandyNotes)
-    local icon = pin:CreateTexture(nil, "OVERLAY")
+    -- AFO Icon
+    local icon = pin:CreateTexture(nil, "ARTWORK")
     icon:SetTexture(GUILD_MEETING_POINT.icon)
     icon:SetAllPoints()
     icon:SetTexelSnappingBias(0)

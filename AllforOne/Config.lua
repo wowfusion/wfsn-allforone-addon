@@ -106,8 +106,16 @@ function Config:CreateFrame()
     -- Character & Guild info
     local infoText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     infoText:SetPoint("TOP", version, "BOTTOM", 0, -8)
-    local playerName = UnitName("player")
-    infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (BR:GetGuildName() or "Keine Gilde") .. "|r")
+    
+    -- Funktion zum Aktualisieren des Gildennamens
+    local function UpdateGuildInfo()
+        local playerName = UnitName("player")
+        infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (BR:GetGuildName() or "Keine Gilde") .. "|r")
+    end
+    UpdateGuildInfo()
+    
+    -- OnShow aktualisiert den Gildennamen
+    frame:HookScript("OnShow", UpdateGuildInfo)
     
     -- Separator
     local sep1 = frame:CreateTexture(nil, "ARTWORK")
@@ -503,9 +511,17 @@ local function CreateInterfaceOptionsPanel()
     -- Character & Guild info (like in the main config panel)
     local charInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     charInfo:SetPoint("TOP", version, "BOTTOM", 0, -5)
-    local playerName = UnitName("player")
-    local guildName = BR:GetGuildName() or "Keine Gilde"
-    charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. guildName .. "|r")
+    
+    -- Funktion zum Aktualisieren des Gildennamens
+    local function UpdateCharInfo()
+        local playerName = UnitName("player")
+        local guildName = BR:GetGuildName() or "Keine Gilde"
+        charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. guildName .. "|r")
+    end
+    UpdateCharInfo()
+    
+    -- OnShow aktualisiert den Gildennamen (falls beim Login noch nicht verfügbar)
+    panel:HookScript("OnShow", UpdateCharInfo)
     
     -- Separator after banner
     local sepBanner = scrollChild:CreateTexture(nil, "ARTWORK")

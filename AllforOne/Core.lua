@@ -1112,15 +1112,26 @@ SlashCmdList["ALLFORONE"] = function(msg)
         -- Send reset message to the target player
         BR:SendAddonMessage("RESET_WARNING:" .. arg, "GUILD")
         BR:Print("Reset-Befehl für " .. arg .. " gesendet.", "info")
-    else
-        BR:Print("Befehle:")
+    elseif cmd == "hilfe" or cmd == "help" then
+        BR:Print("|cFFFFCC00=== All for One Befehle ===|r")
+        BR:Print("|cFF00FF00Addon:|r")
         BR:Print("  /afo - Einstellungen öffnen")
         BR:Print("  /afo status - Status anzeigen")
+        BR:Print("  /afo debug - Debug-Modus umschalten")
         if BR:IsGuildOfficer() then
+            BR:Print("|cFF00FF00Offizier:|r")
             BR:Print("  /afo admin - Offizier-Übersicht öffnen")
             BR:Print("  /afo ping - Gildenmitglieder pingen")
             BR:Print("  /afo reset <Name> - Warnung zurücksetzen")
         end
+        BR:Print("|cFF00FF00QoL Shortcuts:|r")
+        BR:Print("  /rl - UI neu laden")
+        BR:Print("  /rc - Ready Check")
+        BR:Print("  /inv <Name> - Spieler einladen")
+        BR:Print("  /pt [Sek] - Pull Timer (Standard: 10)")
+        BR:Print("  /pt stop - Pull Timer abbrechen")
+    else
+        BR:Print("Unbekannter Befehl. /afo hilfe für alle Befehle.")
     end
 end
 
