@@ -303,34 +303,26 @@ end
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
+    local pinSize = GetPinSize()
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
     pin:SetFrameStrata("TOOLTIP")
     pin:SetFrameLevel(9998) -- Knapp unter den Spieler-Pins
-    pin:SetSize(40, 40)
+    pin:SetSize(pinSize, pinSize)
     
-    -- Goldener Rahmen
+    -- Schwarzer Umriss (Border) - gleicher Stil wie Gildenmitglieder-Pins
     local border = pin:CreateTexture(nil, "BACKGROUND")
     border:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    border:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold
+    border:SetVertexColor(0, 0, 0, 1) -- Schwarz
     border:SetPoint("CENTER")
-    border:SetSize(48, 48)
+    border:SetSize(pinSize * 1.25, pinSize * 1.25)
     pin.border = border
     
-    -- Addon-Icon als Marker
-    local icon = pin:CreateTexture(nil, "ARTWORK")
-    icon:SetTexture(GUILD_MEETING_POINT.icon)
-    icon:SetPoint("CENTER")
-    icon:SetSize(36, 36)
-    pin.icon = icon
-    
-    -- Leuchteffekt
-    local glow = pin:CreateTexture(nil, "OVERLAY")
-    glow:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    glow:SetVertexColor(0.796, 0.71, 0.482, 0.3)
-    glow:SetPoint("CENTER")
-    glow:SetSize(56, 56)
-    glow:SetBlendMode("ADD")
-    pin.glow = glow
+    -- Goldener Kreis als Haupttextur (gleicher Stil wie Spieler-Pins)
+    local bg = pin:CreateTexture(nil, "ARTWORK")
+    bg:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+    bg:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold
+    bg:SetAllPoints()
+    pin.bg = bg
     
     -- Tooltip
     pin:SetScript("OnEnter", function(self)
@@ -451,7 +443,7 @@ function GuildMap:CreateToggleButton()
     -- Create button on the world map - position top left (unter der Navigationsleiste)
     local button = CreateFrame("Button", "AllforOneGuildMapToggle", WorldMapFrame, "BackdropTemplate")
     button:SetSize(32, 32)
-    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -100)
+    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -60)
     button:SetFrameStrata("FULLSCREEN_DIALOG")
     button:SetFrameLevel(500)
     
