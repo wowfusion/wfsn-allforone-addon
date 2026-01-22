@@ -74,23 +74,34 @@ function SecurityCheck:GetCharData()
         AllforOneCharDB = {}
     end
     
+    -- Key mapping for deobfuscation
+    local keyMap = {
+        _s1tp = "totalTimePlayed",
+        _s2lu = "lastUpdate",
+        _s3rt = "lastRealTime",
+        _s4sa = "sessionActive",
+        _s5wd = "wasDisabled",
+    }
+    
     -- Check for obfuscated security data (_sd) and convert to SecurityData
-    if AllforOneCharDB._sd and not AllforOneCharDB.SecurityData then
-        -- Deobfuscate _sd to SecurityData
+    if AllforOneCharDB._sd then
         local secData = {}
-        local keyMap = {
-            _s1tp = "totalTimePlayed",
-            _s2lu = "lastUpdate",
-            _s3rt = "lastRealTime",
-            _s4sa = "sessionActive",
-            _s5wd = "wasDisabled",
-        }
         for obfKey, value in pairs(AllforOneCharDB._sd) do
             local realKey = keyMap[obfKey] or obfKey
             secData[realKey] = value
         end
         AllforOneCharDB.SecurityData = secData
         AllforOneCharDB._sd = nil
+    end
+    
+    -- Check if SecurityData exists but has obfuscated keys (migration)
+    if AllforOneCharDB.SecurityData and AllforOneCharDB.SecurityData._s1tp ~= nil then
+        local secData = {}
+        for obfKey, value in pairs(AllforOneCharDB.SecurityData) do
+            local realKey = keyMap[obfKey] or obfKey
+            secData[realKey] = value
+        end
+        AllforOneCharDB.SecurityData = secData
     end
     
     -- Initialize security data if needed
