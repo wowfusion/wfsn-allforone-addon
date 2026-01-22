@@ -38,9 +38,10 @@ function DragonFlyingBlock:OnInitialize()
 end
 
 function DragonFlyingBlock:OnEnable()
-    if not BR:GetSetting("BlockDragonFlying") then return end
+    local maxLevel = GetMaxLevel()
+    if maxLevel == 0 then return end -- 0 = deaktiviert
     self.enabled = true
-    BR:Debug("DragonFlyingBlock enabled")
+    BR:Debug("DragonFlyingBlock enabled (bis Level " .. maxLevel .. ")")
 end
 
 function DragonFlyingBlock:OnDisable()
@@ -49,7 +50,8 @@ function DragonFlyingBlock:OnDisable()
 end
 
 function DragonFlyingBlock:Refresh()
-    self.enabled = BR:GetSetting("Enabled") and BR:GetSetting("BlockDragonFlying")
+    local maxLevel = GetMaxLevel()
+    self.enabled = BR:GetSetting("Enabled") and maxLevel > 0
 end
 
 function DragonFlyingBlock:HasSkyridingBuff()

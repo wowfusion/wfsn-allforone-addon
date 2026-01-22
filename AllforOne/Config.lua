@@ -587,7 +587,6 @@ local function CreateInterfaceOptionsPanel()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
-        {key = "BlockDragonFlying", label = "Drachenfliegen bis Max-Level blockieren"},
     }
     
     for _, setting in ipairs(settings) do
@@ -646,19 +645,23 @@ local function CreateInterfaceOptionsPanel()
     local dfLevelSlider = CreateFrame("Slider", "AllforOneDFLevelSlider", dfLevelRow, "OptionsSliderTemplate")
     dfLevelSlider:SetPoint("TOPLEFT", dfLevelLabel, "BOTTOMLEFT", 0, -8)
     dfLevelSlider:SetWidth(200)
-    dfLevelSlider:SetMinMaxValues(10, 80)
+    dfLevelSlider:SetMinMaxValues(0, 90)
     dfLevelSlider:SetValueStep(5)
     dfLevelSlider:SetObeyStepOnDrag(true)
-    dfLevelSlider.Low:SetText("10")
-    dfLevelSlider.High:SetText("80")
+    dfLevelSlider.Low:SetText("Aus")
+    dfLevelSlider.High:SetText("90")
+    
+    local function GetDFLevelText(level)
+        return level == 0 and "Aus" or tostring(level)
+    end
     
     local currentDFLevel = BR:GetSetting("DragonFlyingMaxLevel") or 80
     dfLevelSlider:SetValue(currentDFLevel)
-    dfLevelValue:SetText(currentDFLevel)
+    dfLevelValue:SetText(GetDFLevelText(currentDFLevel))
     
     dfLevelSlider:SetScript("OnValueChanged", function(self, value)
         value = math.floor(value)
-        dfLevelValue:SetText(value)
+        dfLevelValue:SetText(GetDFLevelText(value))
         if isGuildMaster then
             BR:SetSetting("DragonFlyingMaxLevel", value, true)
             BR:BroadcastGuildSettings()
@@ -676,7 +679,7 @@ local function CreateInterfaceOptionsPanel()
         UpdateDisplay = function()
             local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
             dfLevelSlider:SetValue(level)
-            dfLevelValue:SetText(level)
+            dfLevelValue:SetText(GetDFLevelText(level))
         end
     }
     
