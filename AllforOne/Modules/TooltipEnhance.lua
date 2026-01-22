@@ -9,7 +9,67 @@ local TooltipEnhance = {
     lastGuildMember = nil,
     lastTooltipUpdate = 0,
     lastTooltipTarget = nil,
+    lastUnit = nil,
+    factionTexture = nil,
 }
+
+-- Faction icon textures
+local FACTION_ICONS = {
+    ["Alliance"] = "Interface\\Timer\\Alliance-Logo",
+    ["Horde"] = "Interface\\Timer\\Horde-Logo",
+}
+
+-- Race to Faction mapping
+local RACE_FACTION = {
+    -- Alliance
+    ["Mensch"] = "Alliance", ["Human"] = "Alliance",
+    ["Zwerg"] = "Alliance", ["Dwarf"] = "Alliance",
+    ["Nachtelf"] = "Alliance", ["Night Elf"] = "Alliance", ["NightElf"] = "Alliance",
+    ["Gnom"] = "Alliance", ["Gnome"] = "Alliance",
+    ["Draenei"] = "Alliance",
+    ["Worgen"] = "Alliance",
+    ["Pandaren"] = nil, -- Neutral, will use player faction
+    ["Leerenelf"] = "Alliance", ["Void Elf"] = "Alliance", ["VoidElf"] = "Alliance",
+    ["Lichtgeschmiedeter Draenei"] = "Alliance", ["Lightforged Draenei"] = "Alliance", ["LightforgedDraenei"] = "Alliance",
+    ["Dunkeleisenzwerg"] = "Alliance", ["Dark Iron Dwarf"] = "Alliance", ["DarkIronDwarf"] = "Alliance",
+    ["Kul Tiraner"] = "Alliance", ["Kul Tiran"] = "Alliance", ["KulTiran"] = "Alliance",
+    ["Mechagnome"] = "Alliance", ["Mechagnom"] = "Alliance",
+    ["Dracthyr"] = nil, -- Can be either
+    ["Irdener"] = "Alliance", ["Earthen"] = "Alliance",
+    -- Horde
+    ["Orc"] = "Horde", ["Ork"] = "Horde",
+    ["Untoter"] = "Horde", ["Undead"] = "Horde", ["Forsaken"] = "Horde",
+    ["Tauren"] = "Horde",
+    ["Troll"] = "Horde",
+    ["Blutelf"] = "Horde", ["Blood Elf"] = "Horde", ["BloodElf"] = "Horde",
+    ["Goblin"] = "Horde",
+    ["Hochbergtauren"] = "Horde", ["Highmountain Tauren"] = "Horde", ["HighmountainTauren"] = "Horde",
+    ["Nachtgeborener"] = "Horde", ["Nightborne"] = "Horde",
+    ["Mag'har-Orc"] = "Horde", ["Mag'har Orc"] = "Horde", ["MagharOrc"] = "Horde",
+    ["Zandalari-Troll"] = "Horde", ["Zandalari Troll"] = "Horde", ["ZandalariTroll"] = "Horde",
+    ["Vulpera"] = "Horde",
+}
+
+-- Parse faction from tooltip text (e.g. "Stufe 80 Irdener Krieger")
+function TooltipEnhance:GetFactionFromTooltip(tooltip)
+    if not tooltip then return nil end
+    
+    for i = 1, tooltip:NumLines() do
+        local line = _G[tooltip:GetName() .. "TextLeft" .. i]
+        if line then
+            local text = line:GetText()
+            if text then
+                -- Check each race in our mapping
+                for race, faction in pairs(RACE_FACTION) do
+                    if text:find(race) then
+                        return faction
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
 
 function TooltipEnhance:OnInitialize()
     BR:Debug("TooltipEnhance module initialized")
@@ -43,6 +103,46 @@ function TooltipEnhance:TooltipHasBRInfo(tooltip)
 end
 
 -- Add addon status info to tooltip for a guild member
+-- Create or update faction background texture on tooltip
+function TooltipEnhance:SetFactionBackground(tooltip, factionOrUnit)
+    if not tooltip then return end
+    
+    local faction
+    -- Check if it's a direct faction string or a unit
+    if factionOrUnit == "Alliance" or factionOrUnit == "Horde" then
+        faction = factionOrUnit
+    elseif factionOrUnit then
+        faction = UnitFactionGroup(factionOrUnit)
+    else
+        faction = UnitFactionGroup("player")
+    end
+    
+    local iconPath = FACTION_ICONS[faction]
+    if not iconPath then return end
+    
+    -- Create texture if it doesn't exist
+    if not self.factionTexture then
+        -- Create as ARTWORK with low sublevel so it appears behind text but above backdrop
+        self.factionTexture = tooltip:CreateTexture(nil, "ARTWORK", nil, -8)
+    end
+    
+    local tex = self.factionTexture
+    tex:SetTexture(iconPath)
+    tex:SetSize(64, 64)
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPRIGHT", tooltip, "TOPRIGHT", -5, -5)
+    tex:SetAlpha(0.35)
+    tex:SetBlendMode("ADD")
+    tex:Show()
+end
+
+-- Hide faction background
+function TooltipEnhance:HideFactionBackground()
+    if self.factionTexture then
+        self.factionTexture:Hide()
+    end
+end
+
 function TooltipEnhance:AddAddonInfo(tooltip, playerName)
     if not playerName then return end
     
@@ -59,6 +159,8 @@ function TooltipEnhance:AddAddonInfo(tooltip, playerName)
     
     self.lastTooltipTarget = playerName:lower()
     self.lastTooltipUpdate = now
+    
+    -- Add faction background (will be set with unit in HookTooltip)
     
     local users = AllforOneDB and AllforOneDB.AddonUsers or {}
     local info = users[playerName:lower()]
@@ -87,6 +189,11 @@ function TooltipEnhance:HookTooltip()
     if self.hooked then return end
     self.hooked = true
     
+    -- Hook tooltip hide to remove faction background
+    GameTooltip:HookScript("OnHide", function()
+        TooltipEnhance:HideFactionBackground()
+    end)
+    
     -- Use TooltipDataProcessor for retail (modern API)
     if TooltipDataProcessor then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
@@ -106,7 +213,8 @@ function TooltipEnhance:HookTooltip()
             local myGuild = GetGuildInfo("player")
             
             if unitGuild and myGuild and unitGuild == myGuild then
-                -- Same guild - show addon status
+                -- Same guild - show addon status and faction background
+                self:SetFactionBackground(tooltip, unit)
                 self:AddAddonInfo(tooltip, playerName)
             elseif unitGuild then
                 -- Different guild
@@ -168,6 +276,9 @@ function TooltipEnhance:HookCommunitiesFrame()
                         
                         C_Timer.After(0.05, function()
                             if GameTooltip:IsShown() and TooltipEnhance.lastGuildMember then
+                                -- Parse faction from tooltip text (most reliable)
+                                local memberFaction = TooltipEnhance:GetFactionFromTooltip(GameTooltip)
+                                TooltipEnhance:SetFactionBackground(GameTooltip, memberFaction or UnitFactionGroup("player"))
                                 TooltipEnhance:AddAddonInfo(GameTooltip, TooltipEnhance.lastGuildMember)
                                 GameTooltip:Show()
                             end
@@ -206,6 +317,8 @@ function TooltipEnhance:HookGuildFrame()
                             local shortName = strsplit("-", name)
                             C_Timer.After(0.05, function()
                                 if GameTooltip:IsShown() then
+                                    -- Use player faction since guild members are same faction
+                                    TooltipEnhance:SetFactionBackground(GameTooltip, "player")
                                     TooltipEnhance:AddAddonInfo(GameTooltip, shortName)
                                     GameTooltip:Show()
                                 end

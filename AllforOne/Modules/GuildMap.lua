@@ -10,6 +10,8 @@ local GuildMap = {
     pins = {},
     memberPositions = {},
     isEnabled = false,
+    pinsVisible = true,
+    toggleButton = nil,
 }
 
 -- Konstanten
@@ -17,6 +19,15 @@ local UPDATE_INTERVAL = 5 -- Sekunden zwischen Position-Updates
 local DEFAULT_PIN_SIZE = 32 -- Standardgröße (größer als vorher)
 local DEFAULT_FONT_SIZE = 12 -- Standardschriftgröße
 local STALE_TIMEOUT = 120 -- 2 Minuten ohne Update = Position entfernen
+
+-- Gildentreffpunkt Konstanten (anpassbar)
+local GUILD_MEETING_POINT = {
+    mapID = 2248,           -- Gründerspitze (Isle of Dorn)
+    x = 0.4738,             -- X-Koordinate (0-1)
+    y = 0.5847,             -- Y-Koordinate (0-1)
+    name = "Gildentreffpunkt",
+    icon = "Interface\\AddOns\\AllforOne\\media\\icon-allforone",
+}
 
 ----------------------------------------------------------------------
 --  Hilfsfunktionen
@@ -267,6 +278,12 @@ function GuildMap:RefreshAllPins()
         return
     end
     
+    -- If pins are hidden, don't show them
+    if not self.pinsVisible then
+        self:HideAllPins()
+        return
+    end
+    
     local currentMapID = WorldMapFrame:GetMapID()
     if not currentMapID then return end
     
@@ -274,6 +291,219 @@ function GuildMap:RefreshAllPins()
         local pin = self:CreatePin(info)
         self:UpdatePinPosition(pin, info.mapID, info.x, info.y, info.name)
     end
+    
+    -- Gildentreffpunkt-Marker aktualisieren
+    self:UpdateMeetingPointPin()
+end
+
+----------------------------------------------------------------------
+--  Gildentreffpunkt-Marker
+----------------------------------------------------------------------
+
+function GuildMap:CreateMeetingPointPin()
+    if self.meetingPointPin then return self.meetingPointPin end
+    
+    local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
+    pin:SetFrameStrata("TOOLTIP")
+    pin:SetFrameLevel(9998) -- Knapp unter den Spieler-Pins
+    pin:SetSize(40, 40)
+    
+    -- Goldener Rahmen
+    local border = pin:CreateTexture(nil, "BACKGROUND")
+    border:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+    border:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold
+    border:SetPoint("CENTER")
+    border:SetSize(48, 48)
+    pin.border = border
+    
+    -- Addon-Icon als Marker
+    local icon = pin:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture(GUILD_MEETING_POINT.icon)
+    icon:SetPoint("CENTER")
+    icon:SetSize(36, 36)
+    pin.icon = icon
+    
+    -- Leuchteffekt
+    local glow = pin:CreateTexture(nil, "OVERLAY")
+    glow:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
+    glow:SetVertexColor(0.796, 0.71, 0.482, 0.3)
+    glow:SetPoint("CENTER")
+    glow:SetSize(56, 56)
+    glow:SetBlendMode("ADD")
+    pin.glow = glow
+    
+    -- Tooltip
+    pin:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("|cFFFFCC00" .. GUILD_MEETING_POINT.name .. "|r", 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("All for One Gildentreffpunkt", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Gründerspitze", 0.5, 0.5, 0.5)
+        GameTooltip:Show()
+    end)
+    
+    pin:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    pin:Hide()
+    self.meetingPointPin = pin
+    return pin
+end
+
+function GuildMap:UpdateMeetingPointPin()
+    if not self.pinsVisible then
+        if self.meetingPointPin then
+            self.meetingPointPin:Hide()
+        end
+        return
+    end
+    
+    local pin = self:CreateMeetingPointPin()
+    local currentMapID = WorldMapFrame:GetMapID()
+    
+    if not currentMapID then
+        pin:Hide()
+        return
+    end
+    
+    local showPin = false
+    local displayX, displayY = GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y
+    
+    if currentMapID == GUILD_MEETING_POINT.mapID then
+        showPin = true
+    else
+        -- Prüfen ob currentMapID eine Parent-Map ist
+        local mapInfo = C_Map.GetMapInfo(GUILD_MEETING_POINT.mapID)
+        if mapInfo then
+            local parentMapID = mapInfo.parentMapID
+            while parentMapID do
+                if parentMapID == currentMapID then
+                    local continentID, worldPos = C_Map.GetWorldPosFromMapPos(GUILD_MEETING_POINT.mapID, CreateVector2D(GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y))
+                    if continentID and worldPos then
+                        local _, newPos = C_Map.GetMapPosFromWorldPos(continentID, worldPos, currentMapID)
+                        if newPos then
+                            displayX, displayY = newPos:GetXY()
+                            showPin = true
+                        end
+                    end
+                    break
+                end
+                local parentInfo = C_Map.GetMapInfo(parentMapID)
+                parentMapID = parentInfo and parentInfo.parentMapID
+            end
+        end
+    end
+    
+    if not showPin then
+        pin:Hide()
+        return
+    end
+    
+    local canvas = WorldMapFrame:GetCanvas()
+    local width, height = canvas:GetSize()
+    
+    local pinX = displayX * width
+    local pinY = -displayY * height
+    
+    pin:ClearAllPoints()
+    pin:SetPoint("CENTER", canvas, "TOPLEFT", pinX, pinY)
+    pin:Show()
+end
+
+----------------------------------------------------------------------
+--  Toggle Button für Pins Sichtbarkeit
+----------------------------------------------------------------------
+
+function GuildMap:TogglePinsVisibility()
+    self.pinsVisible = not self.pinsVisible
+    
+    if self.pinsVisible then
+        self:RefreshAllPins()
+        BR:Debug("GuildMap pins shown")
+    else
+        self:HideAllPins()
+        BR:Debug("GuildMap pins hidden")
+    end
+    
+    self:UpdateToggleButton()
+end
+
+function GuildMap:UpdateToggleButton()
+    if not self.toggleButton then return end
+    
+    if self.pinsVisible then
+        self.toggleButton.icon:SetVertexColor(0.2, 1, 0.2, 1) -- Green = visible
+        self.toggleButton.icon:SetDesaturated(false)
+        self.toggleButton:SetBackdropBorderColor(0.2, 0.8, 0.2, 1)
+    else
+        self.toggleButton.icon:SetVertexColor(1, 0.2, 0.2, 1) -- Red = hidden
+        self.toggleButton.icon:SetDesaturated(false)
+        self.toggleButton:SetBackdropBorderColor(0.8, 0.2, 0.2, 1)
+    end
+end
+
+function GuildMap:CreateToggleButton()
+    if self.toggleButton then return end
+    if not WorldMapFrame then return end
+    
+    -- Create button on the world map - position top left
+    local button = CreateFrame("Button", "AllforOneGuildMapToggle", WorldMapFrame, "BackdropTemplate")
+    button:SetSize(32, 32)
+    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -30)
+    button:SetFrameStrata("FULLSCREEN_DIALOG")
+    button:SetFrameLevel(500)
+    
+    -- Background
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    })
+    button:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+    button:SetBackdropBorderColor(0.2, 0.8, 0.2, 1)
+    
+    -- Icon (addon icon)
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(22, 22)
+    icon:SetPoint("CENTER", 0, 0)
+    icon:SetTexture("Interface\\AddOns\\AllforOne\\media\\icon-allforone")
+    button.icon = icon
+    
+    -- Tooltip
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("|cFFFFCC00Gildenmitglieder anzeigen|r")
+        GameTooltip:AddLine(" ")
+        if GuildMap.pinsVisible then
+            GameTooltip:AddLine("Status: |cFF00FF00Sichtbar|r")
+            GameTooltip:AddLine("Klicken zum Verstecken", 0.7, 0.7, 0.7)
+        else
+            GameTooltip:AddLine("Status: |cFFFF4444Versteckt|r")
+            GameTooltip:AddLine("Klicken zum Anzeigen", 0.7, 0.7, 0.7)
+        end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("|cFF888888Deine Position wird weiterhin gesendet|r", 0.5, 0.5, 0.5)
+        GameTooltip:Show()
+        button:SetBackdropColor(0.2, 0.2, 0.2, 0.95)
+    end)
+    
+    button:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+        button:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    end)
+    
+    button:SetScript("OnClick", function(self, btn)
+        GuildMap:TogglePinsVisibility()
+    end)
+    
+    self.toggleButton = button
+    self:UpdateToggleButton()
+    
+    BR:Debug("GuildMap toggle button created")
 end
 
 ----------------------------------------------------------------------
@@ -361,11 +591,19 @@ function GuildMap:OnEnable()
     
     -- WorldMapFrame Hooks
     if WorldMapFrame then
+        -- Create toggle button on the map
+        self:CreateToggleButton()
+        
         -- Hook für Kartenänderungen
         WorldMapFrame:HookScript("OnShow", function()
             C_Timer.After(0.1, function()
                 GuildMap:RefreshAllPins()
             end)
+        end)
+        
+        -- Close context menu when map is hidden
+        WorldMapFrame:HookScript("OnHide", function()
+            CloseDropDownMenus()
         end)
         
         -- Hook für Kartenwechsel

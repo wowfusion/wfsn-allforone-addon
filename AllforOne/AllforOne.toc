@@ -32,6 +32,7 @@ Modules\AdminPanel.lua
 Modules\WelcomeScreen.lua
 Modules\MinimapIcon.lua
 Modules\SecurityCheck.lua
+Modules\SettingsProtection.lua
 Modules\ChatFilter.lua
 Modules\TooltipEnhance.lua
 Modules\GuildMap.lua

@@ -12,18 +12,22 @@ local Config = {
 }
 
 function BR:OpenConfig()
-    -- Open WoW Interface Options -> AddOns -> AllforOne
-    if Settings and Settings.OpenToCategory then
-        if BR.settingsCategory then
-            Settings.OpenToCategory(BR.settingsCategory:GetID())
-        else
-            -- Fallback: try to find by name
-            Settings.OpenToCategory("AllforOne")
+    -- Verzögere den Aufruf um Combat Lockdown zu vermeiden
+    -- OpenSettingsPanel ist eine geschützte Funktion
+    C_Timer.After(0, function()
+        -- Open WoW Interface Options -> AddOns -> AllforOne
+        if Settings and Settings.OpenToCategory then
+            if BR.settingsCategory then
+                Settings.OpenToCategory(BR.settingsCategory:GetID())
+            else
+                -- Fallback: try to find by name
+                Settings.OpenToCategory("AllforOne")
+            end
+        elseif InterfaceOptionsFrame_OpenToCategory then
+            InterfaceOptionsFrame_OpenToCategory("AllforOne")
+            InterfaceOptionsFrame_OpenToCategory("AllforOne") -- Call twice for subcategories
         end
-    elseif InterfaceOptionsFrame_OpenToCategory then
-        InterfaceOptionsFrame_OpenToCategory("AllforOne")
-        InterfaceOptionsFrame_OpenToCategory("AllforOne") -- Call twice for subcategories
-    end
+    end)
 end
 
 -- Helper function to create gold-styled button

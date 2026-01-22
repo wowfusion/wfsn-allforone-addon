@@ -155,6 +155,130 @@ function BR:Debug(msg)
 end
 
 ----------------------------------------------------------------------
+--  SavedVariables Obfuscation (XOR + Base64)
+----------------------------------------------------------------------
+
+local OBFUSCATION_KEY = "AllforOneGuildSecure2024"
+
+local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+local function base64encode(data)
+    return ((data:gsub('.', function(x) 
+        local r,b='',x:byte()
+        for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+        if (#x < 6) then return '' end
+        local c=0
+        for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+        return b64chars:sub(c+1,c+1)
+    end)..({ '', '==', '=' })[#data%3+1])
+end
+
+local function base64decode(data)
+    data = string.gsub(data, '[^'..b64chars..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b64chars:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+local function xorEncrypt(str, key)
+    local result = {}
+    local keyLen = #key
+    for i = 1, #str do
+        local charCode = string.byte(str, i)
+        local keyChar = string.byte(key, ((i - 1) % keyLen) + 1)
+        result[i] = string.char(bit.bxor(charCode, keyChar))
+    end
+    return table.concat(result)
+end
+
+function BR:ObfuscateString(str)
+    if type(str) ~= "string" then return str end
+    local encrypted = xorEncrypt(str, OBFUSCATION_KEY)
+    return base64encode(encrypted)
+end
+
+function BR:DeobfuscateString(str)
+    if type(str) ~= "string" then return str end
+    local decoded = base64decode(str)
+    return xorEncrypt(decoded, OBFUSCATION_KEY)
+end
+
+function BR:ObfuscateTable(tbl)
+    if type(tbl) ~= "table" then return tbl end
+    local result = {}
+    for k, v in pairs(tbl) do
+        if type(v) == "string" then
+            result[k] = self:ObfuscateString(v)
+        elseif type(v) == "table" then
+            result[k] = self:ObfuscateTable(v)
+        else
+            result[k] = v
+        end
+    end
+    return result
+end
+
+function BR:DeobfuscateTable(tbl)
+    if type(tbl) ~= "table" then return tbl end
+    local result = {}
+    for k, v in pairs(tbl) do
+        if type(v) == "string" then
+            result[k] = self:DeobfuscateString(v)
+        elseif type(v) == "table" then
+            result[k] = self:DeobfuscateTable(v)
+        else
+            result[k] = v
+        end
+    end
+    return result
+end
+
+function BR:ObfuscateSavedVariables()
+    if AllforOneDB.AddonUsers then
+        local obfuscated = {}
+        for name, data in pairs(AllforOneDB.AddonUsers) do
+            local obfName = self:ObfuscateString(name)
+            if type(data) == "table" then
+                obfuscated[obfName] = self:ObfuscateTable(data)
+            else
+                obfuscated[obfName] = data
+            end
+        end
+        AllforOneDB.AddonUsers = obfuscated
+        AllforOneDB._obfuscated = true
+    end
+end
+
+function BR:DeobfuscateSavedVariables()
+    if not AllforOneDB._obfuscated then return end
+    
+    if AllforOneDB.AddonUsers then
+        local deobfuscated = {}
+        for name, data in pairs(AllforOneDB.AddonUsers) do
+            local realName = self:DeobfuscateString(name)
+            if type(data) == "table" then
+                deobfuscated[realName] = self:DeobfuscateTable(data)
+            else
+                deobfuscated[realName] = data
+            end
+        end
+        AllforOneDB.AddonUsers = deobfuscated
+    end
+    
+    AllforOneDB._obfuscated = nil
+end
+
+----------------------------------------------------------------------
 --  Settings Management
 ----------------------------------------------------------------------
 
@@ -841,6 +965,7 @@ end
 BR.Events:RegisterEvent("ADDON_LOADED")
 BR.Events:RegisterEvent("PLAYER_LOGIN")
 BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+BR.Events:RegisterEvent("PLAYER_LOGOUT")
 BR.Events:RegisterEvent("CHAT_MSG_ADDON")
 BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
 
@@ -849,8 +974,15 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         local loadedAddon = ...
         if loadedAddon == addonName then
             BR:InitializeDefaults()
+            BR:DeobfuscateSavedVariables()
             BR:InitializeComm()
             BR:Debug("Addon loaded")
+        end
+    elseif event == "PLAYER_LOGOUT" then
+        BR:ObfuscateSavedVariables()
+        -- Verschleiere geschützte Settings
+        if BR.SettingsProtection then
+            BR.SettingsProtection:ObfuscateSettings()
         end
     elseif event == "PLAYER_LOGIN" then
         BR:EnableModules()

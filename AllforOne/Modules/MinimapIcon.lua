@@ -7,6 +7,7 @@ local addonName, BR = ...
 
 local MinimapIcon = {
     button = nil,
+    officerButton = nil,
     isDragging = false,
 }
 
@@ -60,11 +61,29 @@ end
 
 function MinimapIcon:OnEnable()
     self:CreateButton()
+    -- Create officer button after a delay to ensure guild info is loaded
+    C_Timer.After(3, function()
+        MinimapIcon:RefreshOfficerButton()
+    end)
 end
 
 function MinimapIcon:OnDisable()
     if self.button then
         self.button:Hide()
+    end
+    if self.officerButton then
+        self.officerButton:Hide()
+    end
+end
+
+function MinimapIcon:RefreshOfficerButton()
+    if BR:IsGuildOfficer() then
+        self:CreateOfficerButton()
+        if self.officerButton then
+            self.officerButton:Show()
+        end
+    elseif self.officerButton then
+        self.officerButton:Hide()
     end
 end
 
@@ -154,6 +173,116 @@ function MinimapIcon:CreateButton()
     
     -- Load saved position
     local pos = AllforOneDB.MinimapIconAngle or defaultPosition
+    updatePosition(button, pos)
+end
+
+----------------------------------------------------------------------
+--  Officer Minimap Button (nur für Offiziere sichtbar)
+----------------------------------------------------------------------
+
+function MinimapIcon:CreateOfficerButton()
+    if self.officerButton then return end
+    if not BR:IsGuildOfficer() then return end
+    
+    local button = CreateFrame("Button", "AllforOneOfficerMinimapButton", Minimap)
+    button:SetSize(31, 31)
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(8)
+    button:SetHighlightTexture(136477)
+    button:EnableMouse(true)
+    button:SetMovable(true)
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:RegisterForDrag("LeftButton")
+    
+    -- Background
+    local bg = button:CreateTexture(nil, "BACKGROUND")
+    bg:SetSize(25, 25)
+    bg:SetPoint("CENTER", 0, 0)
+    bg:SetTexture(136467)
+    button.bg = bg
+    
+    -- Icon texture - use addon icon
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(17, 17)
+    icon:SetPoint("CENTER", 0, 0)
+    icon:SetTexture("Interface\\AddOns\\AllforOne\\media\\icon-allforone")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    button.icon = icon
+    
+    -- Border overlay
+    local border = button:CreateTexture(nil, "OVERLAY")
+    border:SetSize(53, 53)
+    border:SetPoint("TOPLEFT", 0, 0)
+    border:SetTexture(136430)
+    button.border = border
+    
+    -- Tooltip
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT", 0, self:GetHeight())
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("|cFFFFCC00Offizier-Übersicht|r")
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("|cFFFFFFFFLinksklick:|r Übersicht öffnen", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine(" ")
+        -- Count addon users who are actually online in guild
+        local onlineCount = 0
+        local onlineGuildMembers = {}
+        local numMembers = GetNumGuildMembers()
+        for i = 1, numMembers do
+            local fullName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+            if fullName and isOnline then
+                local shortName = strsplit("-", fullName)
+                onlineGuildMembers[shortName:lower()] = true
+            end
+        end
+        if AllforOneDB.AddonUsers then
+            for name, data in pairs(AllforOneDB.AddonUsers) do
+                if data and data.status == "ENABLED" and onlineGuildMembers[name:lower()] then
+                    onlineCount = onlineCount + 1
+                end
+            end
+        end
+        GameTooltip:AddLine("Online mit Addon: |cFF00FF00" .. onlineCount .. "|r")
+        GameTooltip:Show()
+    end)
+    
+    button:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    button:SetScript("OnClick", function(self, btn)
+        GameTooltip:Hide()
+        if btn == "LeftButton" then
+            BR:OpenAddonOverview()
+        elseif btn == "RightButton" then
+            BR:OpenConfig()
+        end
+    end)
+    
+    button:SetScript("OnDragStart", function(self)
+        self:LockHighlight()
+        MinimapIcon.isDragging = true
+        self:SetScript("OnUpdate", function(self)
+            local mx, my = Minimap:GetCenter()
+            local px, py = GetCursorPosition()
+            local scale = Minimap:GetEffectiveScale()
+            px, py = px / scale, py / scale
+            local pos = deg(atan2(py - my, px - mx)) % 360
+            AllforOneDB.OfficerMinimapIconAngle = pos
+            updatePosition(self, pos)
+        end)
+    end)
+    
+    button:SetScript("OnDragStop", function(self)
+        self:SetScript("OnUpdate", nil)
+        self:UnlockHighlight()
+        MinimapIcon.isDragging = false
+    end)
+    
+    self.officerButton = button
+    
+    -- Load saved position (default offset from main button)
+    local pos = AllforOneDB.OfficerMinimapIconAngle or (defaultPosition + 30)
     updatePosition(button, pos)
 end
 
