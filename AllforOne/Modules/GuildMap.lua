@@ -22,9 +22,9 @@ local STALE_TIMEOUT = 120 -- 2 Minuten ohne Update = Position entfernen
 
 -- Gildentreffpunkt Konstanten (anpassbar)
 local GUILD_MEETING_POINT = {
-    mapID = 2248,           -- Gründerspitze (Isle of Dorn)
-    x = 0.4738,             -- X-Koordinate (0-1)
-    y = 0.5847,             -- Y-Koordinate (0-1)
+    mapID = 2352,           -- Gründerspitze
+    x = 0.57,               -- X-Koordinate (0-1)
+    y = 0.40,               -- Y-Koordinate (0-1)
     name = "Gildentreffpunkt",
     icon = "Interface\\AddOns\\AllforOne\\media\\icon-allforone",
 }
@@ -448,10 +448,10 @@ function GuildMap:CreateToggleButton()
     if self.toggleButton then return end
     if not WorldMapFrame then return end
     
-    -- Create button on the world map - position top left
+    -- Create button on the world map - position top left (unter der Navigationsleiste)
     local button = CreateFrame("Button", "AllforOneGuildMapToggle", WorldMapFrame, "BackdropTemplate")
     button:SetSize(32, 32)
-    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -30)
+    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -100)
     button:SetFrameStrata("FULLSCREEN_DIALOG")
     button:SetFrameLevel(500)
     

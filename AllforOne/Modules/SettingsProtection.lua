@@ -41,6 +41,24 @@ local function CalculateHash(str)
     return string.format("%08X", hash)
 end
 
+-- Generiert einen verschleierten Key-Namen
+local function ObfuscateKeyName(settingName, key)
+    local combined = key .. settingName .. "_KEY"
+    local hash = CalculateHash(combined)
+    return "_" .. hash:sub(1, 8)
+end
+
+-- Mapping von verschleierten Keys zu Original-Namen (für Deobfuscation)
+local function BuildKeyMapping(key)
+    local mapping = {}
+    for _, settingName in ipairs(PROTECTED_SETTINGS) do
+        local obfuscatedKey = ObfuscateKeyName(settingName, key)
+        mapping[obfuscatedKey] = settingName
+        mapping[settingName] = obfuscatedKey
+    end
+    return mapping
+end
+
 -- Konvertiert Boolean zu verschleiertem Wert
 local function ObfuscateBoolean(value, key, settingName)
     if type(value) ~= "boolean" then return value end
@@ -111,6 +129,7 @@ function SettingsProtection:ObfuscateSettings()
     if not AllforOneCharDB then return end
     
     local key = GetUniqueKey()
+    local keyMapping = BuildKeyMapping(key)
     
     -- Speichere temporär die Klartext-Werte für Checksumme
     local cleartextValues = {}
@@ -124,63 +143,100 @@ function SettingsProtection:ObfuscateSettings()
     -- Berechne Checksumme über Klartext-Werte
     local checksum = CalculateSettingsChecksum(cleartextValues)
     
-    -- Verschleiere die Werte
+    -- Verschleiere die Werte UND die Key-Namen
     for _, settingName in ipairs(PROTECTED_SETTINGS) do
         local value = AllforOneCharDB[settingName]
         if type(value) == "boolean" then
-            AllforOneCharDB[settingName] = ObfuscateBoolean(value, key, settingName)
+            local obfuscatedKey = keyMapping[settingName]
+            local obfuscatedValue = ObfuscateBoolean(value, key, settingName)
+            -- Entferne Original-Key und setze verschleierten Key
+            AllforOneCharDB[settingName] = nil
+            AllforOneCharDB[obfuscatedKey] = obfuscatedValue
         end
     end
     
-    -- Speichere Checksumme
-    AllforOneCharDB._settingsChecksum = checksum
-    AllforOneCharDB._settingsVersion = 2 -- Version für Migration
+    -- Speichere Checksumme mit verschleiertem Namen
+    AllforOneCharDB._x = checksum
+    AllforOneCharDB._v = 3 -- Version 3 = verschleierte Keys
     
-    BR:Debug("SettingsProtection: Settings verschleiert, Checksum: " .. checksum)
+    BR:Debug("SettingsProtection: Settings vollständig verschleiert")
 end
 
 -- Entschlüsselt und validiert alle geschützten Settings beim Laden
 function SettingsProtection:DeobfuscateSettings()
     if not AllforOneCharDB then return true end
     
-    -- Prüfe ob verschleiert (Version 2+)
-    if not AllforOneCharDB._settingsVersion or AllforOneCharDB._settingsVersion < 2 then
-        -- Legacy-Daten: Beim nächsten Speichern verschleiern
-        BR:Debug("SettingsProtection: Legacy-Daten erkannt, werden beim Logout verschleiert")
-        return true
-    end
-    
     local key = GetUniqueKey()
+    local keyMapping = BuildKeyMapping(key)
     local manipulationDetected = false
     local deobfuscatedValues = {}
     
-    -- Entschlüssle die Werte
-    for _, settingName in ipairs(PROTECTED_SETTINGS) do
-        local value = AllforOneCharDB[settingName]
-        if type(value) == "string" then
-            local deobfuscated = DeobfuscateBoolean(value, key, settingName)
-            if deobfuscated == nil then
-                manipulationDetected = true
-                -- Bei Manipulation: Setze auf Standard (true = blockiert)
-                deobfuscatedValues[settingName] = true
-                BR:Debug("SettingsProtection: " .. settingName .. " auf Standard zurückgesetzt")
-            else
-                deobfuscatedValues[settingName] = deobfuscated
+    -- Prüfe Version
+    local version = AllforOneCharDB._v or AllforOneCharDB._settingsVersion or 1
+    
+    if version < 2 then
+        -- Legacy-Daten (Version 1): Beim nächsten Speichern verschleiern
+        BR:Debug("SettingsProtection: Legacy-Daten erkannt")
+        return true
+    elseif version == 2 then
+        -- Version 2: Nur Werte verschleiert, Keys noch lesbar
+        for _, settingName in ipairs(PROTECTED_SETTINGS) do
+            local value = AllforOneCharDB[settingName]
+            if type(value) == "string" then
+                local deobfuscated = DeobfuscateBoolean(value, key, settingName)
+                if deobfuscated == nil then
+                    manipulationDetected = true
+                    deobfuscatedValues[settingName] = true
+                else
+                    deobfuscatedValues[settingName] = deobfuscated
+                end
+            elseif type(value) == "boolean" then
+                deobfuscatedValues[settingName] = value
             end
-        elseif type(value) == "boolean" then
-            -- Bereits entschlüsselt oder Legacy
-            deobfuscatedValues[settingName] = value
         end
+        -- Checksumme prüfen
+        local storedChecksum = AllforOneCharDB._settingsChecksum
+        local calculatedChecksum = CalculateSettingsChecksum(deobfuscatedValues)
+        if storedChecksum and storedChecksum ~= calculatedChecksum then
+            manipulationDetected = true
+        end
+    else
+        -- Version 3+: Keys und Werte verschleiert
+        for _, settingName in ipairs(PROTECTED_SETTINGS) do
+            local obfuscatedKey = keyMapping[settingName]
+            local value = AllforOneCharDB[obfuscatedKey]
+            
+            if type(value) == "string" then
+                local deobfuscated = DeobfuscateBoolean(value, key, settingName)
+                if deobfuscated == nil then
+                    manipulationDetected = true
+                    deobfuscatedValues[settingName] = true
+                    BR:Debug("SettingsProtection: " .. settingName .. " manipulation detected")
+                else
+                    deobfuscatedValues[settingName] = deobfuscated
+                end
+                -- Entferne verschleierten Key
+                AllforOneCharDB[obfuscatedKey] = nil
+            elseif value == nil then
+                -- Setting fehlt - Standard setzen
+                deobfuscatedValues[settingName] = true
+            end
+        end
+        -- Checksumme prüfen (verschleierter Name)
+        local storedChecksum = AllforOneCharDB._x
+        local calculatedChecksum = CalculateSettingsChecksum(deobfuscatedValues)
+        if storedChecksum and storedChecksum ~= calculatedChecksum then
+            BR:Debug("SettingsProtection: Checksum mismatch")
+            manipulationDetected = true
+        end
+        -- Cleanup verschleierte Metadaten
+        AllforOneCharDB._x = nil
+        AllforOneCharDB._v = nil
     end
     
-    -- Validiere Checksumme
-    local storedChecksum = AllforOneCharDB._settingsChecksum
-    local calculatedChecksum = CalculateSettingsChecksum(deobfuscatedValues)
-    
-    if storedChecksum and storedChecksum ~= calculatedChecksum then
-        BR:Debug("SettingsProtection: Checksummen-Mismatch! Gespeichert: " .. tostring(storedChecksum) .. ", Berechnet: " .. calculatedChecksum)
-        manipulationDetected = true
-    end
+    -- Cleanup alte Metadaten
+    AllforOneCharDB._settingsChecksum = nil
+    AllforOneCharDB._settingsVersion = nil
     
     -- Wende entschlüsselte Werte an
     for settingName, value in pairs(deobfuscatedValues) do
@@ -189,7 +245,6 @@ function SettingsProtection:DeobfuscateSettings()
     
     if manipulationDetected then
         BR:Print("Einstellungen wurden manipuliert! Sicherheitsrelevante Einstellungen wurden zurückgesetzt.", "error")
-        -- Setze SecurityData Flag
         if AllforOneCharDB.SecurityData then
             AllforOneCharDB.SecurityData.manipulationDetected = true
             AllforOneCharDB.SecurityData.manipulationTime = time()
