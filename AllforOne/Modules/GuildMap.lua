@@ -306,23 +306,30 @@ function GuildMap:CreateMeetingPointPin()
     local pinSize = GetPinSize()
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
     pin:SetFrameStrata("TOOLTIP")
-    pin:SetFrameLevel(9998) -- Knapp unter den Spieler-Pins
+    pin:SetFrameLevel(9000) -- Unter den Spieler-Pins (die haben 9999)
     pin:SetSize(pinSize, pinSize)
     
-    -- Schwarzer Umriss (Border) - gleicher Stil wie Gildenmitglieder-Pins
+    -- Goldener Rahmen (AFO Farbe) - äußerer Ring
     local border = pin:CreateTexture(nil, "BACKGROUND")
     border:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    border:SetVertexColor(0, 0, 0, 1) -- Schwarz
+    border:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold #CBB57B
     border:SetPoint("CENTER")
-    border:SetSize(pinSize * 1.25, pinSize * 1.25)
+    border:SetSize(pinSize * 1.3, pinSize * 1.3)
     pin.border = border
     
-    -- Goldener Kreis als Haupttextur (gleicher Stil wie Spieler-Pins)
-    local bg = pin:CreateTexture(nil, "ARTWORK")
+    -- Schwarzer Hintergrund-Kreis
+    local bg = pin:CreateTexture(nil, "ARTWORK", nil, 1)
     bg:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    bg:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold
+    bg:SetVertexColor(0, 0, 0, 1) -- Schwarz
     bg:SetAllPoints()
     pin.bg = bg
+    
+    -- All for One Icon in der Mitte
+    local icon = pin:CreateTexture(nil, "ARTWORK", nil, 2)
+    icon:SetTexture("Interface\\AddOns\\AllforOne\\media\\icon-allforone")
+    icon:SetPoint("CENTER")
+    icon:SetSize(pinSize * 0.7, pinSize * 0.7)
+    pin.icon = icon
     
     -- Tooltip
     pin:SetScript("OnEnter", function(self)
