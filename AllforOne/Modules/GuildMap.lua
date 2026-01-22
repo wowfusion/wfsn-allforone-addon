@@ -309,11 +309,9 @@ end
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
-    local pinSize = GetPinSize() * 1.5 -- Größer als normale Pins
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
-    pin:SetFrameStrata("MEDIUM") -- Unter dem Spielerpfeil
+    pin:SetFrameStrata("MEDIUM")
     pin:SetFrameLevel(100)
-    pin:SetSize(pinSize, pinSize)
     
     -- Nur das AFO Icon - kein Kreis/Border
     local icon = pin:CreateTexture(nil, "ARTWORK")
@@ -393,6 +391,13 @@ function GuildMap:UpdateMeetingPointPin()
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
     
+    -- Dynamische Pin-Größe basierend auf Zoom (Canvas-Größe)
+    -- Kleine Canvas = ausgezoomt = größerer Pin, große Canvas = eingezoomt = kleinerer Pin
+    local baseSize = GetPinSize() * 2.5
+    local zoomFactor = math.max(0.3, math.min(1.0, 1000 / width))
+    local pinSize = baseSize * zoomFactor
+    pin:SetSize(pinSize, pinSize)
+    
     local pinX = displayX * width
     local pinY = -displayY * height
     
@@ -408,10 +413,11 @@ end
 function GuildMap:CreateMinimapPin()
     if self.minimapPin then return self.minimapPin end
     
-    -- Wie HandyNotes: niedriges FrameLevel damit Spieler-Pfeil darüber ist
+    -- Sehr niedriges FrameLevel + BACKGROUND Strata damit Spieler-Pfeil darüber ist
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
     pin:SetSize(20, 20)
-    pin:SetFrameLevel(5) -- HandyNotes Standard - Spieler-Pfeil ist höher
+    pin:SetFrameStrata("BACKGROUND")
+    pin:SetFrameLevel(1)
     pin:EnableMouse(true)
     
     -- AFO Icon (OVERLAY Layer wie HandyNotes)

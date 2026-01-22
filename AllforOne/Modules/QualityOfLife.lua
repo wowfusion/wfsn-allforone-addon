@@ -40,6 +40,16 @@ local function RegisterSlashCommands()
         end
     end
     
+    -- /pt und /pulltimer als Alias für /countdown (Pull Timer)
+    SLASH_ALLFORONE_PT1 = "/pt"
+    SLASH_ALLFORONE_PT2 = "/pulltimer"
+    SlashCmdList["ALLFORONE_PT"] = function(msg)
+        local seconds = tonumber(msg) or 10
+        if seconds < 1 then seconds = 1 end
+        if seconds > 60 then seconds = 60 end
+        C_PartyInfo.DoCountdown(seconds)
+    end
+    
     BR:Debug("QualityOfLife: Slash Commands registriert")
 end
 
