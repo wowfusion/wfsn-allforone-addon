@@ -241,6 +241,29 @@ function Config:CreateFrame()
     
     yOffset = yOffset - 40
     
+    -- Reset Button
+    local resetBtn = CreateGoldButton(frame, 200, 28, "Einstellungen zurücksetzen")
+    resetBtn:SetPoint("TOPLEFT", 25, yOffset - 10)
+    resetBtn:SetScript("OnClick", function()
+        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
+            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
+            button1 = "Ja, zurücksetzen",
+            button2 = "Abbrechen",
+            OnAccept = function()
+                BR:ResetSettings(function(success)
+                    if Config.frame and Config.frame:IsShown() then
+                        Config:RefreshCheckboxes()
+                    end
+                end)
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
+    end)
+    
     -- Bottom separator
     local sep3 = frame:CreateTexture(nil, "ARTWORK")
     sep3:SetPoint("BOTTOMLEFT", 25, 70)
@@ -671,10 +694,42 @@ local function CreateInterfaceOptionsPanel()
         end
     end)
     
+    -- Reset Button
+    local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+    resetBtn:SetSize(200, 24)
+    resetBtn:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -15)
+    resetBtn:SetText("Einstellungen zurücksetzen")
+    resetBtn:SetScript("OnClick", function(self)
+        -- Bestätigungsdialog
+        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
+            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
+            button1 = "Ja, zurücksetzen",
+            button2 = "Abbrechen",
+            OnAccept = function()
+                BR:ResetSettings(function(success)
+                    -- Refresh the options panel
+                    if BR.optionsPanel and BR.optionsPanel:IsShown() then
+                        BR.optionsPanel:Hide()
+                        BR.optionsPanel:Show()
+                    end
+                end)
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
+    end)
+    
+    local resetInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    resetInfo:SetPoint("LEFT", resetBtn, "RIGHT", 10, 0)
+    resetInfo:SetText("|cff888888Setzt alle Einstellungen zurück und synchronisiert mit Gilde|r")
+    
     -- GuildMap Pin-Größe Slider
     local pinSizeRow = CreateFrame("Frame", nil, scrollChild)
     pinSizeRow:SetSize(400, 50)
-    pinSizeRow:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -10)
+    pinSizeRow:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -15)
     
     local pinSizeLabel = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     pinSizeLabel:SetPoint("TOPLEFT", 0, 0)

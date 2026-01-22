@@ -27,7 +27,7 @@ local GUILD_MEETING_POINT = {
     x = 0.57,               -- X-Koordinate (0-1)
     y = 0.40,               -- Y-Koordinate (0-1)
     name = "Gildentreffpunkt",
-    icon = "Interface\\AddOns\\AllforOne\\media\\icon-allforone",
+    icon = "Interface\\AddOns\\AllforOne\\media\\icon2-allforone",
 }
 
 ----------------------------------------------------------------------
@@ -500,8 +500,9 @@ function GuildMap:UpdateMinimapPin()
     local playerX, playerY = playerWorldPos.x, playerWorldPos.y
     
     -- Berechne Distanz in Weltkoordinaten (yards)
-    local dx = playerX - targetX
-    local dy = playerY - targetY
+    -- Richtung: vom Spieler ZUM Ziel (nicht umgekehrt!)
+    local dx = targetX - playerX
+    local dy = targetY - playerY
     
     -- Hole Minimap Radius (in yards)
     local mapRadius

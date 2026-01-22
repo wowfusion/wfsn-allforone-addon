@@ -297,6 +297,43 @@ function BR:SetSetting(key, value, perCharacter)
     end
 end
 
+-- Setzt alle Einstellungen zurück und synchronisiert mit Gildenmeister/Offizier
+function BR:ResetSettings(callback)
+    self:Print("Einstellungen werden zurückgesetzt...", "info")
+    
+    -- Lösche alle Character-spezifischen Einstellungen
+    wipe(AllforOneCharDB)
+    
+    -- Initialisiere Standardwerte
+    self:InitializeDefaults()
+    
+    -- Versuche Settings von Gildenmeister/Offizier zu synchronisieren
+    if self:IsInGuild() and not self:IsGuildMaster() then
+        -- Flag setzen dass wir auf Sync warten
+        self.waitingForSettingsSync = true
+        self.settingsSyncCallback = callback
+        
+        -- Request Settings von der Gilde
+        self:RequestGuildSettings()
+        
+        -- Timeout nach 5 Sekunden - falls niemand antwortet, Standardwerte behalten
+        C_Timer.After(5, function()
+            if self.waitingForSettingsSync then
+                self.waitingForSettingsSync = false
+                self.settingsSyncCallback = nil
+                self:Print("Keine Antwort von Gildenleitung - Standardwerte werden verwendet.", "warning")
+                self:RefreshModules()
+                if callback then callback(false) end
+            end
+        end)
+    else
+        -- Gildenmeister oder keine Gilde - sofort fertig
+        self:RefreshModules()
+        self:Print("Einstellungen wurden auf Standardwerte zurückgesetzt.", "info")
+        if callback then callback(true) end
+    end
+end
+
 function BR:InitializeDefaults()
     local defaults = {
         Enabled = true,
