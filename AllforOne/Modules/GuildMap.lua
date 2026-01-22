@@ -29,8 +29,8 @@ local STALE_TIMEOUT = 120 -- 2 Minuten ohne Update = Position entfernen
 -- Gildentreffpunkt Konstanten (anpassbar)
 local GUILD_MEETING_POINT = {
     mapID = 2352,           -- Gründerspitze
-    x = 0.57,               -- X-Koordinate (0-1)
-    y = 0.40,               -- Y-Koordinate (0-1)
+    x = 0.5671,             -- X-Koordinate (56.71%)
+    y = 0.3946,             -- Y-Koordinate (39.46%)
     name = "Gildentreffpunkt",
     icon = "Interface\\AddOns\\AllforOne\\media\\icon2-allforone",
 }

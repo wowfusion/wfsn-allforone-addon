@@ -8,122 +8,92 @@ Das AllforOne Addon verwendet zwei SavedVariables-Tabellen:
 
 ## Verschlüsselungssystem
 
-Das Addon verwendet ein statisches Verschlüsselungssystem (Version 5) um kritische Einstellungen vor Manipulation zu schützen.
+Das Addon verwendet ein **berechnetes Verschlüsselungssystem** (Version 6) um kritische Einstellungen vor Manipulation zu schützen.
+
+### Prinzip
+
+Die Keys und Values werden **zur Laufzeit berechnet** und sind nicht im Quellcode hardcoded:
+
+```lua
+-- Seed-Werte (obfuskiert)
+local S1, S2, S3 = 0x4F41, 0x464F, 0x5242
+
+-- Hash-Berechnung
+local function ComputeHash(str)
+    local h = S1
+    for i = 1, #str do
+        h = bit.bxor(h * 31 + str:byte(i), S2)
+        h = bit.band(h, 0xFFFFFF)
+    end
+    return h
+end
+
+-- Key-Generierung
+local function GenerateKey(original)
+    local hash = ComputeHash(original)
+    return string.format("_%x%x", 
+        bit.band(bit.rshift(hash, 12), 0xFFF),
+        bit.band(hash, 0xFFF))
+end
+```
 
 ### Geschützte Variablen
 
-| Original Key | Verschleiert | Wert-Typ | Beschreibung |
-|-------------|--------------|----------|--------------|
-| `Enabled` | `_k7x2` | Boolean | Addon aktiviert |
-| `BlockTrade` | `_m3p9` | Boolean | Handel nur mit Gilde |
-| `BlockGroupInvites` | `_q1w8` | Boolean | Gruppeneinladungen nur von Gilde |
-| `BlockLFG` | `_r4t6` | Boolean | Dungeonbrowser blockieren |
-| `BlockAuction` | `_y5u3` | Boolean | Auktionshaus blockieren |
-| `BlockMail` | `_h8j1` | Boolean | Briefkasten einschränken |
-| `BlockCraftingOrders` | `_n2b4` | Boolean | Handwerksaufträge einschränken |
-| `BlockWarbound` | `_v6c0` | Boolean | Warbound-Bank blockieren |
-| `BlockDragonFlying` | `_z9a5` | Boolean | Drachenfliegen blockieren |
-| `MailBlockMode` | `_f2x7` | String | Briefkasten-Modus |
+| Original Key | Wert-Typ | Beschreibung |
+|-------------|----------|--------------|
+| `Enabled` | Boolean | Addon aktiviert |
+| `BlockTrade` | Boolean | Handel nur mit Gilde |
+| `BlockGroupInvites` | Boolean | Gruppeneinladungen nur von Gilde |
+| `BlockLFG` | Boolean | Dungeonbrowser blockieren |
+| `BlockAuction` | Boolean | Auktionshaus blockieren |
+| `BlockMail` | Boolean | Briefkasten einschränken |
+| `BlockCraftingOrders` | Boolean | Handwerksaufträge einschränken |
+| `BlockWarbound` | Boolean | Warbound-Bank blockieren |
+| `BlockDragonFlying` | Boolean | Drachenfliegen blockieren |
+| `MailBlockMode` | String | Briefkasten-Modus (full/selective) |
 
-### Boolean-Werte Verschlüsselung
+**Hinweis**: Die tatsächlichen verschleierten Keys werden zur Laufzeit berechnet und sind nicht vorhersagbar ohne den Hash-Algorithmus und die Seed-Werte.
 
-Booleans werden als Strings gespeichert:
-- **true** = `A7_` + Suffix (z.B. `A7_E1` für Enabled=true)
-- **false** = `B3_` + Suffix (z.B. `B3_E0` für Enabled=false)
+### SecurityData
 
-| Setting | True-Wert | False-Wert |
-|---------|-----------|------------|
-| Enabled | `A7_E1` | `B3_E0` |
-| BlockTrade | `A7_T1` | `B3_T0` |
-| BlockGroupInvites | `A7_G1` | `B3_G0` |
-| BlockLFG | `A7_L1` | `B3_L0` |
-| BlockAuction | `A7_U1` | `B3_U0` |
-| BlockMail | `A7_M1` | `B3_M0` |
-| BlockCraftingOrders | `A7_C1` | `B3_C0` |
-| BlockWarbound | `A7_W1` | `B3_W0` |
-| BlockDragonFlying | `A7_D1` | `B3_D0` |
+Die SecurityData-Tabelle wird unter `_sd` gespeichert mit berechneten Keys:
 
-### MailBlockMode Verschlüsselung
-
-| Original | Verschleiert |
-|----------|--------------|
-| `full` | `X4_F` |
-| `selective` | `X4_S` |
-
-### SecurityData Verschlüsselung
-
-Die SecurityData-Tabelle wird unter `_sd` gespeichert mit verschleierten Keys:
-
-| Original Key | Verschleiert | Beschreibung |
-|-------------|--------------|--------------|
-| `totalTimePlayed` | `_s1tp` | Gespielte Zeit |
-| `lastUpdate` | `_s2lu` | Letztes Update |
-| `lastRealTime` | `_s3rt` | Letzte Echtzeit |
-| `sessionActive` | `_s4sa` | Session aktiv |
-| `wasDisabled` | `_s5wd` | War deaktiviert |
+| Original Key | Beschreibung |
+|-------------|--------------|
+| `totalTimePlayed` | Gespielte Zeit (WICHTIG: wird bei Reset NICHT gelöscht!) |
+| `lastUpdate` | Letztes Update |
+| `lastRealTime` | Letzte Echtzeit |
+| `sessionActive` | Session aktiv |
+| `wasDisabled` | War deaktiviert |
 
 ## Versionen
 
 | Version | Änderungen |
 |---------|------------|
 | 1-3 | Legacy (dynamische Verschlüsselung) |
-| 4 | Statische Key/Value Verschlüsselung |
-| 5 | + MailBlockMode + SecurityData Schutz |
+| 4-5 | Statische Key/Value Verschlüsselung |
+| 6 | Berechnete Verschlüsselung (nicht hardcoded) |
 
-## Speicherformat
+## Reset-Funktion
 
-### Beim Laden (Deobfuscation)
-
-```lua
--- Verschleierte Daten werden zu lesbaren Variablen konvertiert
-AllforOneCharDB._k7x2 = "A7_E1"  --> AllforOneCharDB.Enabled = true
-AllforOneCharDB._sd = {...}      --> AllforOneCharDB.SecurityData = {...}
-```
-
-### Beim Speichern (Obfuscation)
-
-```lua
--- Lesbare Variablen werden zu verschleierten Keys/Values konvertiert
-AllforOneCharDB.Enabled = true   --> AllforOneCharDB._k7x2 = "A7_E1"
-AllforOneCharDB.SecurityData     --> AllforOneCharDB._sd (mit verschleierten Keys)
-```
-
-## Sortierung
-
-Geschützte Variablen werden beim Speichern ans Ende der Tabelle verschoben:
-
-1. **Ungeschützte Variablen** (oben):
-   - GuildMapEnabled
-   - GuildMapShowNames
-   - GuildMapPinSize
-   - ShowWelcomeOnLogin
-   - DebugMode
-   - MuteNotificationSounds
-
-2. **Geschützte Variablen** (unten):
-   - `_k7x2`, `_m3p9`, `_q1w8`, etc.
-   - `_sd` (SecurityData)
-   - `_pv` (Version)
-
-## Manipulation-Erkennung
-
-Bei unbekannten oder ungültigen Werten:
-- Booleans mit unbekanntem Suffix werden auf `true` zurückgesetzt
-- Wenn Prefix weder `A7_` noch `B3_` ist → Manipulation erkannt
-- MailBlockMode Fallback: `selective`
+Beim Zurücksetzen der Einstellungen (`BR:ResetSettings()`):
+- Alle Einstellungen werden auf Standardwerte gesetzt
+- **SecurityData wird NICHT gelöscht** (Spielzeit-Tracking bleibt erhalten)
+- Sync mit Gildenmeister/Offizier wird versucht
 
 ## Entwickler-Hinweise
 
 1. **Neue geschützte Variable hinzufügen**:
-   - KEY_MAP erweitern
-   - VALUE_MAP erweitern (für Booleans)
-   - PROTECTED_SETTINGS erweitern
+   - `PROTECTED_SETTINGS` Liste erweitern
+   - Mappings werden automatisch berechnet
 
-2. **Version erhöhen** bei Änderungen an der Verschlüsselung
+2. **Version erhöhen** bei Änderungen an der Verschlüsselung (Seed-Werte ändern)
 
 3. **Legacy-Migration** in `DeobfuscateSettings()` beachten
+
+4. **Sicherheit**: Da Keys berechnet werden, kann niemand durch bloßes Lesen des Codes die SavedVariables manipulieren
 
 ## Dateien
 
 - `Modules/SettingsProtection.lua` - Verschlüsselungslogik
-- `Core.lua` - GetSetting/SetSetting API
+- `Core.lua` - GetSetting/SetSetting API, ResetSettings

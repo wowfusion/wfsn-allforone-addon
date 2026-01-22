@@ -298,11 +298,23 @@ function BR:SetSetting(key, value, perCharacter)
 end
 
 -- Setzt alle Einstellungen zurück und synchronisiert mit Gildenmeister/Offizier
+-- WICHTIG: SecurityData (playedTime etc.) wird NICHT gelöscht!
 function BR:ResetSettings(callback)
     self:Print("Einstellungen werden zurückgesetzt...", "info")
     
+    -- SecurityData sichern BEVOR wir löschen
+    local securityData = AllforOneCharDB.SecurityData
+    local securityDataObf = AllforOneCharDB._sd
+    
     -- Lösche alle Character-spezifischen Einstellungen
     wipe(AllforOneCharDB)
+    
+    -- SecurityData wiederherstellen
+    if securityData then
+        AllforOneCharDB.SecurityData = securityData
+    elseif securityDataObf then
+        AllforOneCharDB._sd = securityDataObf
+    end
     
     -- Initialisiere Standardwerte
     self:InitializeDefaults()

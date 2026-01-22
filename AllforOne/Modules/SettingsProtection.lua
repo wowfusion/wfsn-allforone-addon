@@ -1,57 +1,55 @@
 ----------------------------------------------------------------------
 --  All for One - Settings Protection Module
---  Verschleiert SavedVariables mit statischer Verschlüsselung
---  Einfach aber effektiv - keine dynamischen Keys
+--  Verschleiert SavedVariables mit berechneter Verschlüsselung
+--  Keys werden zur Laufzeit berechnet - nicht im Code lesbar
 ----------------------------------------------------------------------
 
 local addonName, BR = ...
 
 local SettingsProtection = {}
 
--- Statisches Mapping: Original-Name -> Verschleierter Name
--- Diese Namen sind fix und ändern sich nie
-local KEY_MAP = {
-    Enabled = "_k7x2",
-    BlockTrade = "_m3p9",
-    BlockGroupInvites = "_q1w8",
-    BlockLFG = "_r4t6",
-    BlockAuction = "_y5u3",
-    BlockMail = "_h8j1",
-    BlockCraftingOrders = "_n2b4",
-    BlockWarbound = "_v6c0",
-    BlockDragonFlying = "_z9a5",
-    MailBlockMode = "_f2x7",
-}
+----------------------------------------------------------------------
+--  Berechnete Verschlüsselung (nicht hardcoded)
+----------------------------------------------------------------------
 
--- Reverse Mapping für Deobfuscation
-local REVERSE_KEY_MAP = {}
-for original, obfuscated in pairs(KEY_MAP) do
-    REVERSE_KEY_MAP[obfuscated] = original
+-- Seed-Werte für die Berechnung (obfuskiert)
+local S1, S2, S3 = 0x4F41, 0x464F, 0x5242 -- "OA", "FO", "RB"
+
+-- Berechnet einen Hash aus einem String
+local function ComputeHash(str)
+    local h = S1
+    for i = 1, #str do
+        local c = str:byte(i)
+        h = bit.bxor(h * 31 + c, S2)
+        h = bit.band(h, 0xFFFFFF) -- 24-bit limit
+    end
+    return h
 end
 
--- Statische Verschlüsselungswerte für Booleans
--- true = "A7" prefix, false = "B3" prefix + setting-spezifischer suffix
-local VALUE_MAP = {
-    Enabled = { t = "A7_E1", f = "B3_E0" },
-    BlockTrade = { t = "A7_T1", f = "B3_T0" },
-    BlockGroupInvites = { t = "A7_G1", f = "B3_G0" },
-    BlockLFG = { t = "A7_L1", f = "B3_L0" },
-    BlockAuction = { t = "A7_U1", f = "B3_U0" },
-    BlockMail = { t = "A7_M1", f = "B3_M0" },
-    BlockCraftingOrders = { t = "A7_C1", f = "B3_C0" },
-    BlockWarbound = { t = "A7_W1", f = "B3_W0" },
-    BlockDragonFlying = { t = "A7_D1", f = "B3_D0" },
-}
+-- Generiert einen verschleierten Key aus dem Original
+local function GenerateKey(original)
+    local hash = ComputeHash(original)
+    -- Format: _[hex][hex][hex][suffix]
+    return string.format("_%x%x", 
+        bit.band(bit.rshift(hash, 12), 0xFFF),
+        bit.band(hash, 0xFFF))
+end
 
--- MailBlockMode Werte-Mapping (String statt Boolean)
-local MAILMODE_MAP = {
-    full = "X4_F",
-    selective = "X4_S",
-}
-local REVERSE_MAILMODE_MAP = {
-    ["X4_F"] = "full",
-    ["X4_S"] = "selective",
-}
+-- Generiert einen verschleierten Wert für Boolean
+local function GenerateValuePair(original)
+    local h1 = ComputeHash(original .. "T" .. tostring(S3))
+    local h2 = ComputeHash(original .. "F" .. tostring(S3))
+    return {
+        t = string.format("%X_%s", bit.band(h1, 0xFF), original:sub(1,1)),
+        f = string.format("%X_%s", bit.band(h2, 0xFF), original:lower():sub(1,1))
+    }
+end
+
+-- Generiert Security Key
+local function GenerateSecurityKey(original)
+    local hash = ComputeHash("SEC_" .. original)
+    return string.format("_s%x", bit.band(hash, 0xFFF))
+end
 
 -- Liste aller geschützten Settings
 local PROTECTED_SETTINGS = {
@@ -67,17 +65,48 @@ local PROTECTED_SETTINGS = {
     "MailBlockMode",
 }
 
--- Security Data Keys die geschützt werden
-local SECURITY_KEY_MAP = {
-    totalTimePlayed = "_s1tp",
-    lastUpdate = "_s2lu",
-    lastRealTime = "_s3rt",
-    sessionActive = "_s4sa",
-    wasDisabled = "_s5wd",
+-- Security Data Keys
+local SECURITY_KEYS = {
+    "totalTimePlayed",
+    "lastUpdate",
+    "lastRealTime",
+    "sessionActive",
+    "wasDisabled",
 }
+
+-- Mappings werden zur Laufzeit berechnet (nicht im Code sichtbar)
+local KEY_MAP = {}
+local REVERSE_KEY_MAP = {}
+local VALUE_MAP = {}
+
+for _, name in ipairs(PROTECTED_SETTINGS) do
+    local key = GenerateKey(name)
+    KEY_MAP[name] = key
+    REVERSE_KEY_MAP[key] = name
+    if name ~= "MailBlockMode" then
+        VALUE_MAP[name] = GenerateValuePair(name)
+    end
+end
+
+-- MailBlockMode Werte (String statt Boolean)
+local MAILMODE_HASH_F = ComputeHash("MAIL_FULL")
+local MAILMODE_HASH_S = ComputeHash("MAIL_SEL")
+local MAILMODE_MAP = {
+    full = string.format("M%X", bit.band(MAILMODE_HASH_F, 0xFFF)),
+    selective = string.format("M%X", bit.band(MAILMODE_HASH_S, 0xFFF)),
+}
+local REVERSE_MAILMODE_MAP = {}
+for k, v in pairs(MAILMODE_MAP) do
+    REVERSE_MAILMODE_MAP[v] = k
+end
+
+-- Security Key Mappings
+local SECURITY_KEY_MAP = {}
 local REVERSE_SECURITY_KEY_MAP = {}
-for original, obfuscated in pairs(SECURITY_KEY_MAP) do
-    REVERSE_SECURITY_KEY_MAP[obfuscated] = original
+for _, name in ipairs(SECURITY_KEYS) do
+    local key = GenerateSecurityKey(name)
+    SECURITY_KEY_MAP[name] = key
+    REVERSE_SECURITY_KEY_MAP[key] = name
 end
 
 ----------------------------------------------------------------------
@@ -159,9 +188,9 @@ function SettingsProtection:ObfuscateSettings()
     end
     
     -- Version markieren
-    AllforOneCharDB._pv = 5 -- Version 5 = SecurityData + MailBlockMode
+    AllforOneCharDB._pv = 6 -- Version 6 = Berechnete Verschlüsselung
     
-    BR:Debug("SettingsProtection: Settings verschleiert (v5)")
+    BR:Debug("SettingsProtection: Settings verschleiert (v6)")
 end
 
 -- Entschlüsselt alle geschützten Settings beim Laden

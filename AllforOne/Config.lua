@@ -694,42 +694,10 @@ local function CreateInterfaceOptionsPanel()
         end
     end)
     
-    -- Reset Button
-    local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
-    resetBtn:SetSize(200, 24)
-    resetBtn:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -15)
-    resetBtn:SetText("Einstellungen zurücksetzen")
-    resetBtn:SetScript("OnClick", function(self)
-        -- Bestätigungsdialog
-        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
-            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
-            button1 = "Ja, zurücksetzen",
-            button2 = "Abbrechen",
-            OnAccept = function()
-                BR:ResetSettings(function(success)
-                    -- Refresh the options panel
-                    if BR.optionsPanel and BR.optionsPanel:IsShown() then
-                        BR.optionsPanel:Hide()
-                        BR.optionsPanel:Show()
-                    end
-                end)
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
-    end)
-    
-    local resetInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    resetInfo:SetPoint("LEFT", resetBtn, "RIGHT", 10, 0)
-    resetInfo:SetText("|cff888888Setzt alle Einstellungen zurück und synchronisiert mit Gilde|r")
-    
     -- GuildMap Pin-Größe Slider
     local pinSizeRow = CreateFrame("Frame", nil, scrollChild)
     pinSizeRow:SetSize(400, 50)
-    pinSizeRow:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -15)
+    pinSizeRow:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -15)
     
     local pinSizeLabel = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     pinSizeLabel:SetPoint("TOPLEFT", 0, 0)
@@ -770,6 +738,7 @@ local function CreateInterfaceOptionsPanel()
     }
     
     -- Send Settings Button (only for Guild Master)
+    local lastElement = pinSizeRow
     if isGuildMaster then
         local sep3 = scrollChild:CreateTexture(nil, "ARTWORK")
         sep3:SetPoint("TOPLEFT", pinSizeRow, "BOTTOMLEFT", -10, -10)
@@ -787,7 +756,44 @@ local function CreateInterfaceOptionsPanel()
         local sendInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
         sendInfo:SetPoint("LEFT", sendBtn, "RIGHT", 10, 0)
         sendInfo:SetText("|cff888888Sendet aktuelle Einstellungen an alle Online-Mitglieder|r")
+        
+        lastElement = sendBtn
     end
+    
+    -- Reset Button (ganz unten)
+    local sepReset = scrollChild:CreateTexture(nil, "ARTWORK")
+    sepReset:SetPoint("TOPLEFT", lastElement, "BOTTOMLEFT", -10, -20)
+    sepReset:SetSize(500, 1)
+    sepReset:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+    
+    local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+    resetBtn:SetSize(200, 24)
+    resetBtn:SetPoint("TOPLEFT", sepReset, "BOTTOMLEFT", 10, -15)
+    resetBtn:SetText("Einstellungen zurücksetzen")
+    resetBtn:SetScript("OnClick", function(self)
+        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
+            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDeine Spielzeit-Daten bleiben erhalten.\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
+            button1 = "Ja, zurücksetzen",
+            button2 = "Abbrechen",
+            OnAccept = function()
+                BR:ResetSettings(function(success)
+                    if BR.optionsPanel and BR.optionsPanel:IsShown() then
+                        BR.optionsPanel:Hide()
+                        BR.optionsPanel:Show()
+                    end
+                end)
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
+    end)
+    
+    local resetInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    resetInfo:SetPoint("LEFT", resetBtn, "RIGHT", 10, 0)
+    resetInfo:SetText("|cff888888Setzt Einstellungen zurück (Spielzeit bleibt erhalten)|r")
     
     -- Refresh function
     local function RefreshPanel()
