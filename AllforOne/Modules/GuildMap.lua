@@ -309,11 +309,10 @@ end
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
-    local pinSize = GetPinSize() * 1.5 -- Größer als normale Pins
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
     pin:SetFrameStrata("MEDIUM") -- Unter dem Spielerpfeil
     pin:SetFrameLevel(100)
-    pin:SetSize(pinSize, pinSize)
+    pin:SetSize(32, 32) -- Wird in UpdateMeetingPointPin dynamisch angepasst
     
     -- Nur das AFO Icon - kein Kreis/Border
     local icon = pin:CreateTexture(nil, "ARTWORK")
@@ -396,6 +395,13 @@ function GuildMap:UpdateMeetingPointPin()
     local pinX = displayX * width
     local pinY = -displayY * height
     
+    -- Dynamische Größe basierend auf Zoom (Canvas-Größe)
+    -- Bei komplett rausgezoomt (kleine Canvas) größer, bei reingezoomt kleiner
+    local baseSize = 32
+    local zoomFactor = math.max(width, height) / 1000 -- Normalisierter Zoom-Faktor
+    local pinSize = math.max(24, math.min(40, baseSize / math.sqrt(zoomFactor)))
+    pin:SetSize(pinSize, pinSize)
+    
     pin:ClearAllPoints()
     pin:SetPoint("CENTER", canvas, "TOPLEFT", pinX, pinY)
     pin:Show()
@@ -410,8 +416,8 @@ function GuildMap:CreateMinimapPin()
     
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
     pin:SetSize(20, 20)
-    pin:SetFrameStrata("MEDIUM")
-    pin:SetFrameLevel(Minimap:GetFrameLevel() + 5)
+    pin:SetFrameStrata("LOW") -- Unter dem Spielerpfeil
+    pin:SetFrameLevel(1)
     
     -- AFO Icon
     local icon = pin:CreateTexture(nil, "ARTWORK")
