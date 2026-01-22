@@ -397,18 +397,48 @@ function GuildMap:UpdateMeetingPointPin()
 end
 
 ----------------------------------------------------------------------
---  Minimap Gildentreffpunkt Pin
+--  Minimap Gildentreffpunkt Pin (basierend auf HereBeDragons Logik)
 ----------------------------------------------------------------------
+
+-- Minimap Radius Tabelle für verschiedene Zoom-Stufen (aus HereBeDragons)
+local MINIMAP_SIZE = {
+    indoor = { [0] = 300, [1] = 240, [2] = 180, [3] = 120, [4] = 80, [5] = 50 },
+    outdoor = { [0] = 466.67, [1] = 400, [2] = 333.33, [3] = 266.67, [4] = 200, [5] = 133.33 },
+}
+
+-- Cache für Weltkoordinaten des Treffpunkts
+local meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
+
+local function GetMeetingPointWorldCoords()
+    if meetingPointWorldX then
+        return meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
+    end
+    
+    -- Konvertiere Map-Koordinaten zu Weltkoordinaten
+    local instanceID, worldPos = C_Map.GetWorldPosFromMapPos(
+        GUILD_MEETING_POINT.mapID, 
+        CreateVector2D(GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y)
+    )
+    
+    if instanceID and worldPos then
+        meetingPointWorldX = worldPos.x
+        meetingPointWorldY = worldPos.y
+        meetingPointInstanceID = instanceID
+        return meetingPointWorldX, meetingPointWorldY, meetingPointInstanceID
+    end
+    
+    return nil, nil, nil
+end
 
 function GuildMap:CreateMinimapPin()
     if self.minimapPin then return self.minimapPin end
     
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
-    pin:SetSize(24, 24)
+    pin:SetSize(20, 20)
     pin:SetFrameStrata("MEDIUM")
     pin:SetFrameLevel(100)
     
-    -- AFO Icon
+    -- AFO Icon (PNG wird von WoW nicht direkt unterstützt, TGA verwenden)
     local icon = pin:CreateTexture(nil, "ARTWORK")
     icon:SetTexture(GUILD_MEETING_POINT.icon)
     icon:SetAllPoints()
@@ -435,82 +465,87 @@ end
 function GuildMap:UpdateMinimapPin()
     local pin = self:CreateMinimapPin()
     
-    -- Prüfe ob Spieler in der richtigen Zone ist
-    local currentMapID = C_Map.GetBestMapForUnit("player")
-    if not currentMapID then
+    -- Hole Weltkoordinaten des Treffpunkts
+    local targetX, targetY, targetInstanceID = GetMeetingPointWorldCoords()
+    if not targetX then
         pin:Hide()
         return
     end
     
-    -- Prüfe ob wir auf der Treffpunkt-Map oder einer Parent-Map sind
-    local isOnMap = (currentMapID == GUILD_MEETING_POINT.mapID)
+    -- Hole aktuelle Spieler-Weltkoordinaten
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then
+        pin:Hide()
+        return
+    end
     
-    if not isOnMap then
-        -- Prüfe ob currentMapID eine Parent-Map ist
-        local mapInfo = C_Map.GetMapInfo(GUILD_MEETING_POINT.mapID)
-        while mapInfo and mapInfo.parentMapID do
-            if mapInfo.parentMapID == currentMapID then
-                isOnMap = true
-                break
-            end
-            mapInfo = C_Map.GetMapInfo(mapInfo.parentMapID)
+    local playerPos = C_Map.GetPlayerMapPosition(mapID, "player")
+    if not playerPos then
+        pin:Hide()
+        return
+    end
+    
+    local playerInstanceID, playerWorldPos = C_Map.GetWorldPosFromMapPos(mapID, playerPos)
+    if not playerInstanceID or not playerWorldPos then
+        pin:Hide()
+        return
+    end
+    
+    -- Prüfe ob im gleichen Instance (Kontinent)
+    if playerInstanceID ~= targetInstanceID then
+        pin:Hide()
+        return
+    end
+    
+    local playerX, playerY = playerWorldPos.x, playerWorldPos.y
+    
+    -- Berechne Distanz in Weltkoordinaten (yards)
+    local dx = playerX - targetX
+    local dy = playerY - targetY
+    
+    -- Hole Minimap Radius (in yards)
+    local mapRadius
+    if C_Minimap and C_Minimap.GetViewRadius then
+        mapRadius = C_Minimap.GetViewRadius()
+    else
+        -- Fallback für ältere Versionen
+        local zoom = Minimap:GetZoom()
+        local indoors = GetCVar("minimapZoom") == tostring(zoom) and "outdoor" or "indoor"
+        mapRadius = (MINIMAP_SIZE[indoors][zoom] or 200) / 2
+    end
+    
+    -- Minimap Dimensionen
+    local minimapWidth = Minimap:GetWidth() / 2
+    local minimapHeight = Minimap:GetHeight() / 2
+    
+    -- Skaliere Weltdistanz auf Minimap-Pixel
+    local diffX = dx / mapRadius
+    local diffY = dy / mapRadius
+    
+    -- Berücksichtige Minimap-Rotation falls aktiviert
+    if GetCVar("rotateMinimap") == "1" then
+        local facing = GetPlayerFacing()
+        if facing then
+            local sinFacing = math.sin(facing)
+            local cosFacing = math.cos(facing)
+            local rotX = diffX * cosFacing - diffY * sinFacing
+            local rotY = diffX * sinFacing + diffY * cosFacing
+            diffX, diffY = rotX, rotY
         end
     end
     
-    if not isOnMap then
-        pin:Hide()
-        return
+    -- Berechne Distanz vom Zentrum (normalisiert)
+    local dist = math.sqrt(diffX * diffX + diffY * diffY) / 0.9
+    
+    -- Float on edge wenn außerhalb
+    if dist > 1 then
+        diffX = diffX / dist
+        diffY = diffY / dist
     end
     
-    -- Berechne Position auf der Minimap
-    local playerX, playerY = C_Map.GetPlayerMapPosition(currentMapID, "player"):GetXY()
-    if not playerX or not playerY then
-        pin:Hide()
-        return
-    end
-    
-    -- Hole Treffpunkt-Koordinaten auf der aktuellen Map
-    local meetingX, meetingY = GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y
-    
-    -- Wenn wir auf einer Parent-Map sind, müssen wir die Koordinaten umrechnen
-    if currentMapID ~= GUILD_MEETING_POINT.mapID then
-        local continentID, worldPos = C_Map.GetWorldPosFromMapPos(GUILD_MEETING_POINT.mapID, CreateVector2D(GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y))
-        if continentID and worldPos then
-            local _, newPos = C_Map.GetMapPosFromWorldPos(continentID, worldPos, currentMapID)
-            if newPos then
-                meetingX, meetingY = newPos:GetXY()
-            end
-        end
-    end
-    
-    -- Berechne Differenz zum Spieler
-    local dx = meetingX - playerX
-    local dy = meetingY - playerY
-    
-    -- Minimap Radius (halbe Größe der Minimap)
-    local minimapRadius = Minimap:GetWidth() / 2
-    
-    -- Skalierung basierend auf Minimap-Zoom
-    local minimapZoom = Minimap:GetZoom()
-    local scale = minimapRadius * (1 + minimapZoom * 0.1) * 10 -- Angepasster Skalierungsfaktor
-    
-    -- Position auf der Minimap
-    local pinX = dx * scale
-    local pinY = -dy * scale
-    
-    -- Distanz vom Zentrum
-    local distance = math.sqrt(pinX * pinX + pinY * pinY)
-    
-    -- Wenn außerhalb der Minimap, am Rand anzeigen
-    local maxDist = minimapRadius - 12
-    if distance > maxDist then
-        local factor = maxDist / distance
-        pinX = pinX * factor
-        pinY = pinY * factor
-    end
-    
+    -- Position auf der Minimap setzen
     pin:ClearAllPoints()
-    pin:SetPoint("CENTER", Minimap, "CENTER", pinX, pinY)
+    pin:SetPoint("CENTER", Minimap, "CENTER", diffX * minimapWidth, -diffY * minimapHeight)
     pin:Show()
 end
 
