@@ -12,6 +12,7 @@ local GuildMap = {
     isEnabled = false,
     pinsVisible = true,
     toggleButton = nil,
+    minimapPin = nil, -- Minimap Pin für Gildentreffpunkt
 }
 
 -- Konstanten
@@ -309,26 +310,10 @@ function GuildMap:CreateMeetingPointPin()
     pin:SetFrameLevel(100)
     pin:SetSize(pinSize, pinSize)
     
-    -- Goldener Rahmen (AFO Farbe) - äußerer Ring
-    local border = pin:CreateTexture(nil, "BACKGROUND")
-    border:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    border:SetVertexColor(0.796, 0.71, 0.482, 1) -- Gold #CBB57B
-    border:SetPoint("CENTER")
-    border:SetSize(pinSize * 1.3, pinSize * 1.3)
-    pin.border = border
-    
-    -- Schwarzer Hintergrund-Kreis
-    local bg = pin:CreateTexture(nil, "ARTWORK", nil, 1)
-    bg:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMaskSmall")
-    bg:SetVertexColor(0, 0, 0, 1) -- Schwarz
-    bg:SetAllPoints()
-    pin.bg = bg
-    
-    -- All for One Icon in der Mitte
-    local icon = pin:CreateTexture(nil, "ARTWORK", nil, 2)
-    icon:SetTexture("Interface\\AddOns\\AllforOne\\media\\icon-allforone")
-    icon:SetPoint("CENTER")
-    icon:SetSize(pinSize * 0.7, pinSize * 0.7)
+    -- Nur das AFO Icon - kein Kreis/Border
+    local icon = pin:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture(GUILD_MEETING_POINT.icon)
+    icon:SetAllPoints()
     pin.icon = icon
     
     -- Tooltip
@@ -408,6 +393,124 @@ function GuildMap:UpdateMeetingPointPin()
     
     pin:ClearAllPoints()
     pin:SetPoint("CENTER", canvas, "TOPLEFT", pinX, pinY)
+    pin:Show()
+end
+
+----------------------------------------------------------------------
+--  Minimap Gildentreffpunkt Pin
+----------------------------------------------------------------------
+
+function GuildMap:CreateMinimapPin()
+    if self.minimapPin then return self.minimapPin end
+    
+    local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
+    pin:SetSize(24, 24)
+    pin:SetFrameStrata("MEDIUM")
+    pin:SetFrameLevel(100)
+    
+    -- AFO Icon
+    local icon = pin:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture(GUILD_MEETING_POINT.icon)
+    icon:SetAllPoints()
+    pin.icon = icon
+    
+    -- Tooltip
+    pin:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("|cFFFFCC00" .. GUILD_MEETING_POINT.name .. "|r", 1, 1, 1)
+        GameTooltip:AddLine("All for One Gildentreffpunkt", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    
+    pin:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    
+    pin:Hide()
+    self.minimapPin = pin
+    return pin
+end
+
+function GuildMap:UpdateMinimapPin()
+    local pin = self:CreateMinimapPin()
+    
+    -- Prüfe ob Spieler in der richtigen Zone ist
+    local currentMapID = C_Map.GetBestMapForUnit("player")
+    if not currentMapID then
+        pin:Hide()
+        return
+    end
+    
+    -- Prüfe ob wir auf der Treffpunkt-Map oder einer Parent-Map sind
+    local isOnMap = (currentMapID == GUILD_MEETING_POINT.mapID)
+    
+    if not isOnMap then
+        -- Prüfe ob currentMapID eine Parent-Map ist
+        local mapInfo = C_Map.GetMapInfo(GUILD_MEETING_POINT.mapID)
+        while mapInfo and mapInfo.parentMapID do
+            if mapInfo.parentMapID == currentMapID then
+                isOnMap = true
+                break
+            end
+            mapInfo = C_Map.GetMapInfo(mapInfo.parentMapID)
+        end
+    end
+    
+    if not isOnMap then
+        pin:Hide()
+        return
+    end
+    
+    -- Berechne Position auf der Minimap
+    local playerX, playerY = C_Map.GetPlayerMapPosition(currentMapID, "player"):GetXY()
+    if not playerX or not playerY then
+        pin:Hide()
+        return
+    end
+    
+    -- Hole Treffpunkt-Koordinaten auf der aktuellen Map
+    local meetingX, meetingY = GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y
+    
+    -- Wenn wir auf einer Parent-Map sind, müssen wir die Koordinaten umrechnen
+    if currentMapID ~= GUILD_MEETING_POINT.mapID then
+        local continentID, worldPos = C_Map.GetWorldPosFromMapPos(GUILD_MEETING_POINT.mapID, CreateVector2D(GUILD_MEETING_POINT.x, GUILD_MEETING_POINT.y))
+        if continentID and worldPos then
+            local _, newPos = C_Map.GetMapPosFromWorldPos(continentID, worldPos, currentMapID)
+            if newPos then
+                meetingX, meetingY = newPos:GetXY()
+            end
+        end
+    end
+    
+    -- Berechne Differenz zum Spieler
+    local dx = meetingX - playerX
+    local dy = meetingY - playerY
+    
+    -- Minimap Radius (halbe Größe der Minimap)
+    local minimapRadius = Minimap:GetWidth() / 2
+    
+    -- Skalierung basierend auf Minimap-Zoom
+    local minimapZoom = Minimap:GetZoom()
+    local scale = minimapRadius * (1 + minimapZoom * 0.1) * 10 -- Angepasster Skalierungsfaktor
+    
+    -- Position auf der Minimap
+    local pinX = dx * scale
+    local pinY = -dy * scale
+    
+    -- Distanz vom Zentrum
+    local distance = math.sqrt(pinX * pinX + pinY * pinY)
+    
+    -- Wenn außerhalb der Minimap, am Rand anzeigen
+    local maxDist = minimapRadius - 12
+    if distance > maxDist then
+        local factor = maxDist / distance
+        pinX = pinX * factor
+        pinY = pinY * factor
+    end
+    
+    pin:ClearAllPoints()
+    pin:SetPoint("CENTER", Minimap, "CENTER", pinX, pinY)
     pin:Show()
 end
 
@@ -588,6 +691,9 @@ function GuildMap:OnEnable()
     -- Position-Update-Timer starten
     self:StartPositionUpdates()
     
+    -- Minimap Pin Timer starten
+    self:StartMinimapUpdates()
+    
     -- WorldMapFrame Hooks
     if WorldMapFrame then
         -- Create toggle button on the map
@@ -633,8 +739,19 @@ function GuildMap:OnDisable()
         self.updateTimer = nil
     end
     
+    -- Minimap Timer stoppen
+    if self.minimapTimer then
+        self.minimapTimer:Cancel()
+        self.minimapTimer = nil
+    end
+    
     -- Alle Pins verstecken
     self:HideAllPins()
+    
+    -- Minimap Pin verstecken
+    if self.minimapPin then
+        self.minimapPin:Hide()
+    end
     
     BR:Debug("GuildMap module disabled")
 end
@@ -668,6 +785,24 @@ function GuildMap:StartPositionUpdates()
     C_Timer.NewTicker(30, function()
         if self.isEnabled then
             self:CleanupOldPositions()
+        end
+    end)
+end
+
+function GuildMap:StartMinimapUpdates()
+    if self.minimapTimer then
+        self.minimapTimer:Cancel()
+    end
+    
+    -- Sofort ersten Update
+    C_Timer.After(1, function()
+        self:UpdateMinimapPin()
+    end)
+    
+    -- Periodische Updates (alle 1 Sekunde für smooth movement)
+    self.minimapTimer = C_Timer.NewTicker(1, function()
+        if self.isEnabled then
+            self:UpdateMinimapPin()
         end
     end)
 end
