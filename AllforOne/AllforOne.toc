@@ -42,6 +42,7 @@ Modules\SettingsProtection.lua
 Modules\ChatFilter.lua
 Modules\TooltipEnhance.lua
 Modules\GuildMap.lua
+Modules\QualityOfLife.lua
 
 # Configuration
 Config.lua

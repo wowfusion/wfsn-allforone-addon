@@ -309,10 +309,11 @@ end
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
+    local pinSize = GetPinSize() * 1.5 -- Größer als normale Pins
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
     pin:SetFrameStrata("MEDIUM") -- Unter dem Spielerpfeil
     pin:SetFrameLevel(100)
-    pin:SetSize(32, 32) -- Wird in UpdateMeetingPointPin dynamisch angepasst
+    pin:SetSize(pinSize, pinSize)
     
     -- Nur das AFO Icon - kein Kreis/Border
     local icon = pin:CreateTexture(nil, "ARTWORK")
@@ -395,13 +396,6 @@ function GuildMap:UpdateMeetingPointPin()
     local pinX = displayX * width
     local pinY = -displayY * height
     
-    -- Dynamische Größe basierend auf Zoom (Canvas-Größe)
-    -- Bei komplett rausgezoomt (kleine Canvas) größer, bei reingezoomt kleiner
-    local baseSize = 32
-    local zoomFactor = math.max(width, height) / 1000 -- Normalisierter Zoom-Faktor
-    local pinSize = math.max(24, math.min(40, baseSize / math.sqrt(zoomFactor)))
-    pin:SetSize(pinSize, pinSize)
-    
     pin:ClearAllPoints()
     pin:SetPoint("CENTER", canvas, "TOPLEFT", pinX, pinY)
     pin:Show()
@@ -414,15 +408,18 @@ end
 function GuildMap:CreateMinimapPin()
     if self.minimapPin then return self.minimapPin end
     
+    -- Wie HandyNotes: niedriges FrameLevel damit Spieler-Pfeil darüber ist
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
     pin:SetSize(20, 20)
-    pin:SetFrameStrata("LOW") -- Unter dem Spielerpfeil
-    pin:SetFrameLevel(1)
+    pin:SetFrameLevel(5) -- HandyNotes Standard - Spieler-Pfeil ist höher
+    pin:EnableMouse(true)
     
-    -- AFO Icon
-    local icon = pin:CreateTexture(nil, "ARTWORK")
+    -- AFO Icon (OVERLAY Layer wie HandyNotes)
+    local icon = pin:CreateTexture(nil, "OVERLAY")
     icon:SetTexture(GUILD_MEETING_POINT.icon)
     icon:SetAllPoints()
+    icon:SetTexelSnappingBias(0)
+    icon:SetSnapToPixelGrid(false)
     pin.icon = icon
     
     -- Tooltip

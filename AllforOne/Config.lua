@@ -659,18 +659,55 @@ local function CreateInterfaceOptionsPanel()
     dfLevelSlider:SetValue(currentDFLevel)
     dfLevelValue:SetText(GetDFLevelText(currentDFLevel))
     
-    dfLevelSlider:SetScript("OnValueChanged", function(self, value)
+    -- Inputfeld für Level
+    local dfLevelInput = CreateFrame("EditBox", "AllforOneDFLevelInput", dfLevelRow, "InputBoxTemplate")
+    dfLevelInput:SetSize(40, 20)
+    dfLevelInput:SetPoint("LEFT", dfLevelSlider, "RIGHT", 15, 0)
+    dfLevelInput:SetAutoFocus(false)
+    dfLevelInput:SetNumeric(true)
+    dfLevelInput:SetMaxLetters(2)
+    dfLevelInput:SetText(tostring(currentDFLevel))
+    
+    local function UpdateFromSlider(value)
         value = math.floor(value)
         dfLevelValue:SetText(GetDFLevelText(value))
+        dfLevelInput:SetText(value == 0 and "" or tostring(value))
         if isGuildMaster then
             BR:SetSetting("DragonFlyingMaxLevel", value, true)
             BR:BroadcastGuildSettings()
         end
+    end
+    
+    local function UpdateFromInput()
+        local text = dfLevelInput:GetText()
+        local value = tonumber(text) or 0
+        value = math.max(0, math.min(90, value))
+        -- Auf 5er-Schritte runden
+        value = math.floor(value / 5 + 0.5) * 5
+        dfLevelSlider:SetValue(value)
+        dfLevelInput:SetText(value == 0 and "" or tostring(value))
+    end
+    
+    dfLevelSlider:SetScript("OnValueChanged", function(self, value)
+        UpdateFromSlider(value)
+    end)
+    
+    dfLevelInput:SetScript("OnEnterPressed", function(self)
+        UpdateFromInput()
+        self:ClearFocus()
+    end)
+    
+    dfLevelInput:SetScript("OnEscapePressed", function(self)
+        local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
+        self:SetText(level == 0 and "" or tostring(level))
+        self:ClearFocus()
     end)
     
     if not isGuildMaster then
         dfLevelSlider:Disable()
         dfLevelSlider:SetAlpha(0.6)
+        dfLevelInput:Disable()
+        dfLevelInput:SetAlpha(0.6)
         dfLevelLabel:SetTextColor(0.5, 0.5, 0.5)
         dfLevelValue:SetTextColor(0.5, 0.5, 0.5)
     end
@@ -680,6 +717,7 @@ local function CreateInterfaceOptionsPanel()
             local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
             dfLevelSlider:SetValue(level)
             dfLevelValue:SetText(GetDFLevelText(level))
+            dfLevelInput:SetText(level == 0 and "" or tostring(level))
         end
     }
     
