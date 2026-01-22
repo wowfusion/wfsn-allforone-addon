@@ -357,6 +357,7 @@ function BR:InitializeDefaults()
         BlockCraftingOrders = true,
         BlockWarbound = true,
         BlockDragonFlying = true,
+        DragonFlyingMaxLevel = 80, -- Ab welchem Level Himmelsreiten erlaubt ist
         MailBlockMode = "selective", -- "full" or "selective"
         DebugMode = false,
         MuteNotificationSounds = false,
@@ -759,7 +760,7 @@ function BR:HandleGuildSettings(message, sender)
     local isFromGuildMaster = parts[1] == "GUILD_SETTINGS"
     local isFromOfficer = parts[1] == "OFFICER_SETTINGS"
     
-    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):BlockDragonFlying:hash
+    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):BlockDragonFlying:DragonFlyingMaxLevel:hash
     local settings = {
         BlockTrade = parts[2] == "1",
         BlockGroupInvites = parts[3] == "1",
@@ -770,8 +771,9 @@ function BR:HandleGuildSettings(message, sender)
         BlockCraftingOrders = parts[8] == "1",
         MailBlockMode = parts[9] == "1" and "full" or "selective",
         BlockDragonFlying = parts[10] == "1",
+        DragonFlyingMaxLevel = tonumber(parts[11]) or 80,
     }
-    local receivedHash = parts[11] or ""
+    local receivedHash = parts[12] or ""
     
     -- Priority logic:
     -- 1. Guild Master settings ALWAYS override everything
@@ -809,7 +811,7 @@ function BR:HandleGuildSettings(message, sender)
             local guildSyncedSettings = {
                 "BlockTrade", "BlockGroupInvites", "BlockLFG", "BlockAuction",
                 "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode",
-                "BlockDragonFlying"
+                "BlockDragonFlying", "DragonFlyingMaxLevel"
             }
             for _, key in ipairs(guildSyncedSettings) do
                 if settings[key] ~= nil then
@@ -835,6 +837,7 @@ function BR:CalculateSettingsHash()
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
         self:GetSetting("BlockDragonFlying") and "1" or "0",
+        tostring(self:GetSetting("DragonFlyingMaxLevel") or 80),
     }
     return table.concat(hashParts, "")
 end
@@ -871,6 +874,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
         self:GetSetting("BlockDragonFlying") and "1" or "0",
+        tostring(self:GetSetting("DragonFlyingMaxLevel") or 80),
         currentHash
     }
     
@@ -888,6 +892,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         BlockCraftingOrders = self:GetSetting("BlockCraftingOrders"),
         MailBlockMode = self:GetSetting("MailBlockMode"),
         BlockDragonFlying = self:GetSetting("BlockDragonFlying"),
+        DragonFlyingMaxLevel = self:GetSetting("DragonFlyingMaxLevel"),
     }
     AllforOneDB.GuildSettingsFromGM = true
     
@@ -924,6 +929,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             storedSettings.BlockCraftingOrders and "1" or "0",
             mailMode == "full" and "1" or "0",
             storedSettings.BlockDragonFlying and "1" or "0",
+            tostring(storedSettings.DragonFlyingMaxLevel or 80),
             storedHash
         }
     else
@@ -940,6 +946,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             self:GetSetting("BlockCraftingOrders") and "1" or "0",
             mailMode == "full" and "1" or "0",
             self:GetSetting("BlockDragonFlying") and "1" or "0",
+            tostring(self:GetSetting("DragonFlyingMaxLevel") or 80),
             currentHash
         }
     end

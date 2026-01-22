@@ -29,8 +29,8 @@ end
 -- Generiert einen verschleierten Key aus dem Original
 local function GenerateKey(original)
     local hash = ComputeHash(original)
-    -- Format: _[hex][hex][hex][suffix]
-    return string.format("_%x%x", 
+    -- Format: z_[hex] (z_ damit alphabetisch nach Klarnamen sortiert)
+    return string.format("z_%x%x", 
         bit.band(bit.rshift(hash, 12), 0xFFF),
         bit.band(hash, 0xFFF))
 end
@@ -48,7 +48,7 @@ end
 -- Generiert Security Key
 local function GenerateSecurityKey(original)
     local hash = ComputeHash("SEC_" .. original)
-    return string.format("_s%x", bit.band(hash, 0xFFF))
+    return string.format("zs%x", bit.band(hash, 0xFFF))
 end
 
 -- Liste aller geschützten Settings
@@ -184,20 +184,20 @@ function SettingsProtection:ObfuscateSettings()
             obfSecData[obfKey] = value
         end
         AllforOneCharDB.SecurityData = nil
-        AllforOneCharDB._sd = obfSecData
+        AllforOneCharDB.zsd = obfSecData
     end
     
     -- Version markieren
-    AllforOneCharDB._pv = 6 -- Version 6 = Berechnete Verschlüsselung
+    AllforOneCharDB.zpv = 7 -- Version 7 = z_ Prefix für Sortierung
     
-    BR:Debug("SettingsProtection: Settings verschleiert (v6)")
+    BR:Debug("SettingsProtection: Settings verschleiert (v7)")
 end
 
 -- Entschlüsselt alle geschützten Settings beim Laden
 function SettingsProtection:DeobfuscateSettings()
     if not AllforOneCharDB then return true end
     
-    local version = AllforOneCharDB._pv or AllforOneCharDB._v or 1
+    local version = AllforOneCharDB.zpv or AllforOneCharDB._pv or AllforOneCharDB._v or 1
     
     -- Version 4+: Statische Verschlüsselung
     if version >= 4 then
@@ -222,17 +222,21 @@ function SettingsProtection:DeobfuscateSettings()
         end
         
         -- SecurityData entschlüsseln (Version 5+)
-        if AllforOneCharDB._sd then
+        -- Unterstützt sowohl _sd (alt) als auch zsd (neu)
+        local sdTable = AllforOneCharDB.zsd or AllforOneCharDB._sd
+        if sdTable then
             local secData = {}
-            for obfKey, value in pairs(AllforOneCharDB._sd) do
+            for obfKey, value in pairs(sdTable) do
                 local realKey = REVERSE_SECURITY_KEY_MAP[obfKey] or obfKey
                 secData[realKey] = value
             end
+            AllforOneCharDB.zsd = nil
             AllforOneCharDB._sd = nil
             AllforOneCharDB.SecurityData = secData
         end
         
-        -- Cleanup
+        -- Cleanup alte und neue Version-Marker
+        AllforOneCharDB.zpv = nil
         AllforOneCharDB._pv = nil
     else
         -- Legacy-Versionen: Prüfe ob alte verschleierte Keys existieren

@@ -631,6 +631,57 @@ local function CreateInterfaceOptionsPanel()
     
     lastRow = mailModeRow
     
+    -- DragonFlying Max Level Slider (only for Guild Master)
+    local dfLevelRow = CreateFrame("Frame", nil, scrollChild)
+    dfLevelRow:SetSize(400, 50)
+    dfLevelRow:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", 0, -10)
+    
+    local dfLevelLabel = dfLevelRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    dfLevelLabel:SetPoint("TOPLEFT", 0, 0)
+    dfLevelLabel:SetText("Himmelsreiten erlaubt ab Stufe:")
+    
+    local dfLevelValue = dfLevelRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    dfLevelValue:SetPoint("LEFT", dfLevelLabel, "RIGHT", 5, 0)
+    
+    local dfLevelSlider = CreateFrame("Slider", "AllforOneDFLevelSlider", dfLevelRow, "OptionsSliderTemplate")
+    dfLevelSlider:SetPoint("TOPLEFT", dfLevelLabel, "BOTTOMLEFT", 0, -8)
+    dfLevelSlider:SetWidth(200)
+    dfLevelSlider:SetMinMaxValues(10, 80)
+    dfLevelSlider:SetValueStep(5)
+    dfLevelSlider:SetObeyStepOnDrag(true)
+    dfLevelSlider.Low:SetText("10")
+    dfLevelSlider.High:SetText("80")
+    
+    local currentDFLevel = BR:GetSetting("DragonFlyingMaxLevel") or 80
+    dfLevelSlider:SetValue(currentDFLevel)
+    dfLevelValue:SetText(currentDFLevel)
+    
+    dfLevelSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        dfLevelValue:SetText(value)
+        if isGuildMaster then
+            BR:SetSetting("DragonFlyingMaxLevel", value, true)
+            BR:BroadcastGuildSettings()
+        end
+    end)
+    
+    if not isGuildMaster then
+        dfLevelSlider:Disable()
+        dfLevelSlider:SetAlpha(0.6)
+        dfLevelLabel:SetTextColor(0.5, 0.5, 0.5)
+        dfLevelValue:SetTextColor(0.5, 0.5, 0.5)
+    end
+    
+    statusLabels["DragonFlyingMaxLevel"] = {
+        UpdateDisplay = function()
+            local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
+            dfLevelSlider:SetValue(level)
+            dfLevelValue:SetText(level)
+        end
+    }
+    
+    lastRow = dfLevelRow
+    
     -- Separator 2
     local sep2 = scrollChild:CreateTexture(nil, "ARTWORK")
     sep2:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", -10, -15)
@@ -791,9 +842,6 @@ local function CreateInterfaceOptionsPanel()
         StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
     end)
     
-    local resetInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    resetInfo:SetPoint("LEFT", resetBtn, "RIGHT", 10, 0)
-    resetInfo:SetText("|cff888888Setzt Einstellungen zurück (Spielzeit bleibt erhalten)|r")
     
     -- Refresh function
     local function RefreshPanel()

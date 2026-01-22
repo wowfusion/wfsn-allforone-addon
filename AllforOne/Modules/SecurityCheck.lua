@@ -74,34 +74,47 @@ function SecurityCheck:GetCharData()
         AllforOneCharDB = {}
     end
     
-    -- Key mapping for deobfuscation
+    -- Key mapping for deobfuscation (alt _s* und neu zs*)
     local keyMap = {
+        -- Alte Keys (Version 6)
         _s1tp = "totalTimePlayed",
         _s2lu = "lastUpdate",
         _s3rt = "lastRealTime",
         _s4sa = "sessionActive",
         _s5wd = "wasDisabled",
+        -- Neue Keys (Version 7) - werden zur Laufzeit berechnet
+        zsbf2 = "totalTimePlayed",
+        zsc30 = "lastUpdate",
+        zsb22 = "lastRealTime",
+        zs2c6 = "sessionActive",
+        zsbe5 = "wasDisabled",
     }
     
-    -- Check for obfuscated security data (_sd) and convert to SecurityData
-    if AllforOneCharDB._sd then
+    -- Check for obfuscated security data (zsd oder _sd) and convert to SecurityData
+    local sdTable = AllforOneCharDB.zsd or AllforOneCharDB._sd
+    if sdTable then
         local secData = {}
-        for obfKey, value in pairs(AllforOneCharDB._sd) do
+        for obfKey, value in pairs(sdTable) do
             local realKey = keyMap[obfKey] or obfKey
             secData[realKey] = value
         end
         AllforOneCharDB.SecurityData = secData
+        AllforOneCharDB.zsd = nil
         AllforOneCharDB._sd = nil
     end
     
     -- Check if SecurityData exists but has obfuscated keys (migration)
-    if AllforOneCharDB.SecurityData and AllforOneCharDB.SecurityData._s1tp ~= nil then
-        local secData = {}
-        for obfKey, value in pairs(AllforOneCharDB.SecurityData) do
-            local realKey = keyMap[obfKey] or obfKey
-            secData[realKey] = value
+    if AllforOneCharDB.SecurityData then
+        local needsMigration = AllforOneCharDB.SecurityData._s1tp ~= nil 
+            or AllforOneCharDB.SecurityData.zsbf2 ~= nil
+        if needsMigration then
+            local secData = {}
+            for obfKey, value in pairs(AllforOneCharDB.SecurityData) do
+                local realKey = keyMap[obfKey] or obfKey
+                secData[realKey] = value
+            end
+            AllforOneCharDB.SecurityData = secData
         end
-        AllforOneCharDB.SecurityData = secData
     end
     
     -- Initialize security data if needed
