@@ -74,20 +74,27 @@ function SecurityCheck:GetCharData()
         AllforOneCharDB = {}
     end
     
-    -- Key mapping for deobfuscation (alt _s* und neu zs*)
+    -- Key mapping for deobfuscation (alle Versionen)
+    -- Keys werden durch Hash berechnet, daher alle bekannten Varianten
     local keyMap = {
-        -- Alte Keys (Version 6)
+        -- Version 6 (manuelle Keys)
         _s1tp = "totalTimePlayed",
         _s2lu = "lastUpdate",
         _s3rt = "lastRealTime",
         _s4sa = "sessionActive",
         _s5wd = "wasDisabled",
-        -- Neue Keys (Version 7) - werden zur Laufzeit berechnet
+        -- Version 7 (z_ prefix)
         zsbf2 = "totalTimePlayed",
         zsc30 = "lastUpdate",
         zsb22 = "lastRealTime",
         zs2c6 = "sessionActive",
         zsbe5 = "wasDisabled",
+        -- Berechnete Keys (_s prefix, andere Hash-Varianten)
+        _sbf2 = "totalTimePlayed",
+        _sc30 = "lastUpdate",
+        _sb22 = "lastRealTime",
+        _s2c6 = "sessionActive",
+        _sbe5 = "wasDisabled",
     }
     
     -- Check for obfuscated security data (zsd oder _sd) and convert to SecurityData
@@ -105,8 +112,14 @@ function SecurityCheck:GetCharData()
     
     -- Check if SecurityData exists but has obfuscated keys (migration)
     if AllforOneCharDB.SecurityData then
-        local needsMigration = AllforOneCharDB.SecurityData._s1tp ~= nil 
-            or AllforOneCharDB.SecurityData.zsbf2 ~= nil
+        -- Prüfe ob irgendein verschlüsselter Key vorhanden ist
+        local needsMigration = false
+        for key, _ in pairs(AllforOneCharDB.SecurityData) do
+            if keyMap[key] then
+                needsMigration = true
+                break
+            end
+        end
         if needsMigration then
             local secData = {}
             for obfKey, value in pairs(AllforOneCharDB.SecurityData) do
