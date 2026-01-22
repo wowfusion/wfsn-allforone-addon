@@ -41,9 +41,15 @@ local function RegisterSlashCommands()
     end
     
     -- /pt und /pulltimer als Alias für /countdown (Pull Timer)
+    -- Verwendung: /pt [sekunden] oder /pt stop
     SLASH_ALLFORONE_PT1 = "/pt"
     SLASH_ALLFORONE_PT2 = "/pulltimer"
     SlashCmdList["ALLFORONE_PT"] = function(msg)
+        msg = msg and msg:lower():trim() or ""
+        if msg == "stop" or msg == "cancel" or msg == "0" then
+            C_PartyInfo.DoCountdown(0)
+            return
+        end
         local seconds = tonumber(msg) or 10
         if seconds < 1 then seconds = 1 end
         if seconds > 60 then seconds = 60 end

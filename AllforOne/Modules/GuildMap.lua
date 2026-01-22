@@ -391,12 +391,10 @@ function GuildMap:UpdateMeetingPointPin()
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
     
-    -- Dynamische Pin-Größe basierend auf Zoom (Canvas-Größe)
-    -- Kleine Canvas = ausgezoomt = größerer Pin, große Canvas = eingezoomt = kleinerer Pin
-    local baseSize = GetPinSize() * 2.5
-    local zoomFactor = math.max(0.3, math.min(1.0, 1000 / width))
-    local pinSize = baseSize * zoomFactor
-    pin:SetSize(pinSize, pinSize)
+    -- Konstante Pin-Größe wie HandyNotes (SetScalingLimits 1.0-1.2)
+    -- Pin bleibt visuell konstant unabhängig vom Zoom
+    local baseSize = 32 -- Feste Größe in Pixeln
+    pin:SetSize(baseSize, baseSize)
     
     local pinX = displayX * width
     local pinY = -displayY * height
