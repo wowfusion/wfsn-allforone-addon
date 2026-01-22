@@ -303,10 +303,10 @@ end
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
-    local pinSize = GetPinSize()
+    local pinSize = GetPinSize() * 1.5 -- Größer als normale Pins
     local pin = CreateFrame("Button", "AllforOneGuildMeetingPoint", WorldMapFrame:GetCanvas())
-    pin:SetFrameStrata("TOOLTIP")
-    pin:SetFrameLevel(9000) -- Unter den Spieler-Pins (die haben 9999)
+    pin:SetFrameStrata("MEDIUM") -- Unter dem Spielerpfeil
+    pin:SetFrameLevel(100)
     pin:SetSize(pinSize, pinSize)
     
     -- Goldener Rahmen (AFO Farbe) - äußerer Ring
@@ -450,7 +450,7 @@ function GuildMap:CreateToggleButton()
     -- Create button on the world map - position top left (unter der Navigationsleiste)
     local button = CreateFrame("Button", "AllforOneGuildMapToggle", WorldMapFrame, "BackdropTemplate")
     button:SetSize(32, 32)
-    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -60)
+    button:SetPoint("TOPLEFT", WorldMapFrame, "TOPLEFT", 10, -70)
     button:SetFrameStrata("FULLSCREEN_DIALOG")
     button:SetFrameLevel(500)
     
