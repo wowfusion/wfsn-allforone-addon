@@ -18,7 +18,7 @@ local BUFF_SKYRIDING = 404464      -- Flugstil: Himmelsreiten
 local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 
 -- Max Level ist fest auf 80 gesetzt
-local MAX_LEVEL = 80
+local MAX_LEVEL = 90
 
 -- CVar für Flugstil (0 = Steady, 1 = Skyriding)
 local CVAR_FLIGHT_STYLE = "dynamicFlightMountedOption"
@@ -78,7 +78,7 @@ end
 -- Prüft den CVar für den Flugstil (zuverlässiger als Buff-Check)
 function DragonFlyingBlock:IsSkyridingEnabled()
     -- Methode 1: Buff-Check (am zuverlässigsten wenn gemountet)
-    -- Steady Flight Buff bedeutet definitiv kein Skyriding
+    -- Steady Flight Buff bedeutet definitiv kein Skyriding - NUR dann nicht blockieren
     if self:HasSteadyFlightBuff() then
         BR:Debug("DragonFlyingBlock: Steady Flight Buff gefunden - NICHT blockieren")
         return false
@@ -104,10 +104,10 @@ function DragonFlyingBlock:IsSkyridingEnabled()
         end
     end
     
-    -- Methode 3: Wenn weder Buff noch CVar, prüfe ob Spieler überhaupt fliegen kann
-    -- In diesem Fall nehmen wir an, dass Skyriding NICHT aktiv ist (sicherer)
-    BR:Debug("DragonFlyingBlock: Kein Buff/CVar gefunden - nehme Steady Flight an (sicherer)")
-    return false
+    -- Methode 3: Wenn weder Buff noch CVar eindeutig ist, blockieren wir sicherheitshalber
+    -- Der Spieler soll explizit auf Statisches Fliegen wechseln
+    BR:Debug("DragonFlyingBlock: Kein eindeutiger Flugstil erkannt - blockieren (sicherheitshalber)")
+    return true
 end
 
 function DragonFlyingBlock:IsInDragonridingException()
@@ -273,7 +273,7 @@ function DragonFlyingBlock:ShowSkyridingBlockPopup(playerLevel)
     
     -- Erstelle Popup-Frame
     local frame = CreateFrame("Frame", "AllforOneSkyridingBlockPopup", UIParent, "BackdropTemplate")
-    frame:SetSize(380, 160)
+    frame:SetSize(380, 140)
     frame:SetPoint("TOP", UIParent, "TOP", 0, -150)
     frame:SetBackdrop(BR.Backdrops.Popup)
     frame:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
@@ -307,13 +307,13 @@ function DragonFlyingBlock:ShowSkyridingBlockPopup(playerLevel)
         -- Setze den Button als Kind des Popups und positioniere ihn
         switchBtn:SetParent(frame)
         switchBtn:ClearAllPoints()
-        switchBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 40)
+        switchBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 25)
         switchBtn:Show()
     else
         -- Fallback: Normaler Button mit CVar-Wechsel
         switchBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         switchBtn:SetSize(180, 26)
-        switchBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 40)
+        switchBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 25)
         switchBtn:SetText("Auf Statisch wechseln")
         switchBtn:SetScript("OnClick", function()
             DragonFlyingBlock:SwitchToSteadyFlight()
