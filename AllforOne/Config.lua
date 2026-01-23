@@ -146,6 +146,7 @@ function Config:CreateFrame()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
+        {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }
     
     for _, setting in ipairs(blockSettings) do
@@ -645,99 +646,6 @@ local function CreateInterfaceOptionsPanel()
     end
     
     lastRow = mailModeRow
-    
-    -- DragonFlying Max Level Slider (only for Guild Master)
-    local dfLevelRow = CreateFrame("Frame", nil, scrollChild)
-    dfLevelRow:SetSize(400, 50)
-    dfLevelRow:SetPoint("TOPLEFT", lastRow, "BOTTOMLEFT", 0, -10)
-    
-    local dfLevelLabel = dfLevelRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    dfLevelLabel:SetPoint("TOPLEFT", 0, 0)
-    dfLevelLabel:SetText("Himmelsreiten erlaubt ab Stufe:")
-    
-    local dfLevelValue = dfLevelRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    dfLevelValue:SetPoint("LEFT", dfLevelLabel, "RIGHT", 5, 0)
-    
-    local dfLevelSlider = CreateFrame("Slider", "AllforOneDFLevelSlider", dfLevelRow, "OptionsSliderTemplate")
-    dfLevelSlider:SetPoint("TOPLEFT", dfLevelLabel, "BOTTOMLEFT", 0, -8)
-    dfLevelSlider:SetWidth(200)
-    dfLevelSlider:SetMinMaxValues(0, 90)
-    dfLevelSlider:SetValueStep(5)
-    dfLevelSlider:SetObeyStepOnDrag(true)
-    dfLevelSlider.Low:SetText("Aus")
-    dfLevelSlider.High:SetText("90")
-    
-    local function GetDFLevelText(level)
-        return level == 0 and "Aus" or tostring(level)
-    end
-    
-    local currentDFLevel = BR:GetSetting("DragonFlyingMaxLevel") or 80
-    dfLevelSlider:SetValue(currentDFLevel)
-    dfLevelValue:SetText(GetDFLevelText(currentDFLevel))
-    
-    -- Inputfeld für Level
-    local dfLevelInput = CreateFrame("EditBox", "AllforOneDFLevelInput", dfLevelRow, "InputBoxTemplate")
-    dfLevelInput:SetSize(40, 20)
-    dfLevelInput:SetPoint("LEFT", dfLevelSlider, "RIGHT", 15, 0)
-    dfLevelInput:SetAutoFocus(false)
-    dfLevelInput:SetNumeric(true)
-    dfLevelInput:SetMaxLetters(2)
-    dfLevelInput:SetText(tostring(currentDFLevel))
-    
-    local function UpdateFromSlider(value)
-        value = math.floor(value)
-        dfLevelValue:SetText(GetDFLevelText(value))
-        dfLevelInput:SetText(value == 0 and "" or tostring(value))
-        if isGuildMaster then
-            BR:SetSetting("DragonFlyingMaxLevel", value, true)
-            BR:BroadcastGuildSettings()
-        end
-    end
-    
-    local function UpdateFromInput()
-        local text = dfLevelInput:GetText()
-        local value = tonumber(text) or 0
-        value = math.max(0, math.min(90, value))
-        -- Auf 5er-Schritte runden
-        value = math.floor(value / 5 + 0.5) * 5
-        dfLevelSlider:SetValue(value)
-        dfLevelInput:SetText(value == 0 and "" or tostring(value))
-    end
-    
-    dfLevelSlider:SetScript("OnValueChanged", function(self, value)
-        UpdateFromSlider(value)
-    end)
-    
-    dfLevelInput:SetScript("OnEnterPressed", function(self)
-        UpdateFromInput()
-        self:ClearFocus()
-    end)
-    
-    dfLevelInput:SetScript("OnEscapePressed", function(self)
-        local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
-        self:SetText(level == 0 and "" or tostring(level))
-        self:ClearFocus()
-    end)
-    
-    if not isGuildMaster then
-        dfLevelSlider:Disable()
-        dfLevelSlider:SetAlpha(0.6)
-        dfLevelInput:Disable()
-        dfLevelInput:SetAlpha(0.6)
-        dfLevelLabel:SetTextColor(0.5, 0.5, 0.5)
-        dfLevelValue:SetTextColor(0.5, 0.5, 0.5)
-    end
-    
-    statusLabels["DragonFlyingMaxLevel"] = {
-        UpdateDisplay = function()
-            local level = BR:GetSetting("DragonFlyingMaxLevel") or 80
-            dfLevelSlider:SetValue(level)
-            dfLevelValue:SetText(GetDFLevelText(level))
-            dfLevelInput:SetText(level == 0 and "" or tostring(level))
-        end
-    }
-    
-    lastRow = dfLevelRow
     
     -- Separator 2
     local sep2 = scrollChild:CreateTexture(nil, "ARTWORK")

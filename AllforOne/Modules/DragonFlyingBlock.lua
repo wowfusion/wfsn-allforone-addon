@@ -17,10 +17,8 @@ local DragonFlyingBlock = {
 local BUFF_SKYRIDING = 404464      -- Flugstil: Himmelsreiten
 local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 
--- Max level wird aus Settings geladen (Standard: 80)
-local function GetMaxLevel()
-    return BR:GetSetting("DragonFlyingMaxLevel") or 80
-end
+-- Max Level ist fest auf 80 gesetzt
+local MAX_LEVEL = 80
 
 -- Quest IDs related to dragonriding training/races (exceptions)
 local DRAGONRIDING_QUEST_IDS = {
@@ -38,10 +36,9 @@ function DragonFlyingBlock:OnInitialize()
 end
 
 function DragonFlyingBlock:OnEnable()
-    local maxLevel = GetMaxLevel()
-    if maxLevel == 0 then return end -- 0 = deaktiviert
+    if not BR:GetSetting("BlockDragonFlying") then return end
     self.enabled = true
-    BR:Debug("DragonFlyingBlock enabled (bis Level " .. maxLevel .. ")")
+    BR:Debug("DragonFlyingBlock enabled (bis Level " .. MAX_LEVEL .. ")")
 end
 
 function DragonFlyingBlock:OnDisable()
@@ -50,8 +47,7 @@ function DragonFlyingBlock:OnDisable()
 end
 
 function DragonFlyingBlock:Refresh()
-    local maxLevel = GetMaxLevel()
-    self.enabled = BR:GetSetting("Enabled") and maxLevel > 0
+    self.enabled = BR:GetSetting("Enabled") and BR:GetSetting("BlockDragonFlying")
 end
 
 function DragonFlyingBlock:HasSkyridingBuff()
@@ -100,7 +96,7 @@ function DragonFlyingBlock:ShouldBlock()
     
     -- Don't block at max level
     local playerLevel = UnitLevel("player")
-    if playerLevel >= GetMaxLevel() then
+    if playerLevel >= MAX_LEVEL then
         return false
     end
     
@@ -148,10 +144,9 @@ function DragonFlyingBlock:ShowBlockMessage()
     self.lastBlockTime = now
     
     local playerLevel = UnitLevel("player")
-    local maxLevel = GetMaxLevel()
     local msg = string.format(
         "Himmelsreiten ist erst ab Stufe %d erlaubt!\n\nAktuelle Stufe: %d",
-        maxLevel, playerLevel
+        MAX_LEVEL, playerLevel
     )
     
     if BR.ShowWarningPopup then
