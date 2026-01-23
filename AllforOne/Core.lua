@@ -1016,6 +1016,7 @@ BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
 BR.Events:RegisterEvent("PLAYER_LOGOUT")
 BR.Events:RegisterEvent("CHAT_MSG_ADDON")
 BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
+BR.Events:RegisterEvent("PLAYER_GUILD_UPDATE") -- Wichtig: Gildendaten erst hier verfügbar
 
 BR.Events:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -1063,20 +1064,23 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
         BR:HandleAddonMessage(...)
-    elseif event == "GUILD_ROSTER_UPDATE" then
+    elseif event == "GUILD_ROSTER_UPDATE" or event == "PLAYER_GUILD_UPDATE" then
         -- Markiere dass Gildendaten jetzt verfügbar sind
-        BR.guildDataLoaded = true
+        if not BR.guildDataLoaded then
+            BR.guildDataLoaded = true
+            BR:Debug("Gildendaten jetzt verfügbar (" .. event .. ")")
+            
+            -- Config-Frame aktualisieren falls offen (nur beim ersten Mal)
+            if BR.configFrame and BR.configFrame:IsShown() then
+                BR:Debug(event .. ": Config wird neu geöffnet")
+                BR.configFrame:Hide()
+                BR:ShowConfig()
+            end
+        end
         
         -- Refresh guild member cache
         if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
             BR.Modules.GuildCheck:RefreshCache()
-        end
-        
-        -- Config-Frame aktualisieren falls offen
-        if BR.configFrame and BR.configFrame:IsShown() then
-            BR:Debug("GUILD_ROSTER_UPDATE: Config wird neu geöffnet")
-            BR.configFrame:Hide()
-            BR:ShowConfig()
         end
     end
 end)

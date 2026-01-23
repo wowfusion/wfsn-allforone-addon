@@ -71,6 +71,16 @@ function Config:CreateFrame()
         self.frame = nil
     end
     
+    -- Warte auf Gildendaten bevor Config geöffnet wird
+    if not BR.guildDataLoaded and IsInGuild() then
+        BR:Print("Gildendaten werden geladen... Bitte kurz warten.", "info")
+        -- Versuche nach 1 Sekunde erneut
+        C_Timer.After(1, function()
+            BR:ShowConfig()
+        end)
+        return
+    end
+    
     local isGuildMaster = BR:IsGuildMaster()
     local isOfficer = BR:IsGuildOfficer()
     local frameHeight = (isGuildMaster or isOfficer) and 615 or 575
