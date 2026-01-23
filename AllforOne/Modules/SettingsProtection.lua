@@ -53,6 +53,7 @@ end
 
 -- Liste aller geschützten Settings
 local PROTECTED_SETTINGS = {
+    "Enabled",
     "BlockTrade",
     "BlockGroupInvites",
     "BlockLFG",
@@ -60,8 +61,8 @@ local PROTECTED_SETTINGS = {
     "BlockMail",
     "BlockCraftingOrders",
     "BlockWarbound",
+    "BlockDragonFlying",
     "MailBlockMode",
-    "DragonFlyingMaxLevel", -- Numerischer Wert (0-90)
 }
 
 -- Security Data Keys
@@ -82,8 +83,7 @@ for _, name in ipairs(PROTECTED_SETTINGS) do
     local key = GenerateKey(name)
     KEY_MAP[name] = key
     REVERSE_KEY_MAP[key] = name
-    -- Nur Boolean-Settings brauchen Value-Map
-    if name ~= "MailBlockMode" and name ~= "DragonFlyingMaxLevel" then
+    if name ~= "MailBlockMode" then
         VALUE_MAP[name] = GenerateValuePair(name)
     end
 end
@@ -169,13 +169,6 @@ function SettingsProtection:ObfuscateSettings()
                 AllforOneCharDB[settingName] = nil
                 AllforOneCharDB[obfuscatedKey] = MAILMODE_MAP[value]
             end
-        elseif settingName == "DragonFlyingMaxLevel" then
-            -- DragonFlyingMaxLevel ist numerisch - XOR-Verschleierung
-            if type(value) == "number" then
-                local obfValue = bit.bxor(value, 0x5A) -- XOR mit Konstante
-                AllforOneCharDB[settingName] = nil
-                AllforOneCharDB[obfuscatedKey] = string.format("N%X", obfValue)
-            end
         elseif type(value) == "boolean" then
             local obfuscatedValue = ObfuscateBoolean(value, settingName)
             AllforOneCharDB[settingName] = nil
@@ -215,14 +208,6 @@ function SettingsProtection:DeobfuscateSettings()
                     -- MailBlockMode ist ein String
                     local deobfuscated = REVERSE_MAILMODE_MAP[value]
                     AllforOneCharDB[settingName] = deobfuscated or "selective"
-                elseif settingName == "DragonFlyingMaxLevel" then
-                    -- DragonFlyingMaxLevel ist numerisch - XOR-Entschlüsselung
-                    if type(value) == "string" and value:sub(1, 1) == "N" then
-                        local numVal = tonumber(value:sub(2), 16) or 0
-                        AllforOneCharDB[settingName] = bit.bxor(numVal, 0x5A)
-                    else
-                        AllforOneCharDB[settingName] = 80 -- Default
-                    end
                 else
                     local deobfuscated = DeobfuscateBoolean(value, settingName)
                     if deobfuscated ~= nil then

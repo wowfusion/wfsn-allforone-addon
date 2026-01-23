@@ -65,23 +65,7 @@ local function CreateGoldButton(parent, width, height, text)
 end
 
 function Config:CreateFrame()
-    -- Frame immer neu erstellen um Gildenmeister-Status korrekt zu prüfen
-    if self.frame then
-        self.frame:Hide()
-        self.frame = nil
-    end
-    
-    -- Warte auf Gildendaten bevor Config geöffnet wird (wie bei Sauercrowd)
-    if not BR:IsGuildDataReady() then
-        BR:Print("Gildendaten werden geladen... Bitte kurz warten.", "info")
-        -- Fordere Gildendaten an falls noch nicht geschehen
-        BR:RequestGuildRoster()
-        -- Versuche nach 1.5 Sekunden erneut
-        C_Timer.After(1.5, function()
-            BR:ShowConfig()
-        end)
-        return
-    end
+    if self.frame then return end
     
     local isGuildMaster = BR:IsGuildMaster()
     local isOfficer = BR:IsGuildOfficer()
@@ -399,6 +383,16 @@ function Config:CreateCheckbox(parent, setting, label, tooltip, isBlockingSettin
         local value = self:GetChecked()
         BR:SetSetting(setting, value, true)
         BR:RefreshModules()
+        
+        if setting == "Enabled" then
+            if value then
+                BR:EnableModules()
+                BR:BroadcastStatus()
+            else
+                BR:DisableModules()
+                BR:BroadcastStatus()
+            end
+        end
         
         -- If this is a blocking setting and user is guild master, broadcast to guild
         if self.isBlockingSetting and BR:IsGuildMaster() then

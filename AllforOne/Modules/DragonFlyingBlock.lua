@@ -51,7 +51,7 @@ end
 
 function DragonFlyingBlock:Refresh()
     local maxLevel = GetMaxLevel()
-    self.enabled = maxLevel > 0
+    self.enabled = BR:GetSetting("Enabled") and maxLevel > 0
 end
 
 function DragonFlyingBlock:HasSkyridingBuff()
@@ -95,6 +95,8 @@ end
 function DragonFlyingBlock:ShouldBlock()
     -- Basic checks
     if not self.enabled then return false end
+    if not BR:GetSetting("Enabled") then return false end
+    if not BR:GetSetting("BlockDragonFlying") then return false end
     
     -- Don't block at max level
     local playerLevel = UnitLevel("player")

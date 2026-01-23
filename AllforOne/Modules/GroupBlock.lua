@@ -30,11 +30,15 @@ function GroupBlock:OnDisable()
 end
 
 function GroupBlock:Refresh()
-    self.enabled = BR:GetSetting("BlockGroupInvites") == true
+    if BR:GetSetting("Enabled") and BR:GetSetting("BlockGroupInvites") then
+        self.enabled = true
+    else
+        self.enabled = false
+    end
 end
 
 function GroupBlock:ShouldBlock()
-    return self.enabled and BR:GetSetting("BlockGroupInvites")
+    return self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockGroupInvites")
 end
 
 function GroupBlock:IsGuildMember(playerName)

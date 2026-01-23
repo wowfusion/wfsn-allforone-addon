@@ -348,6 +348,7 @@ end
 
 function BR:InitializeDefaults()
     local defaults = {
+        Enabled = true,
         BlockTrade = true,
         BlockGroupInvites = true,
         BlockLFG = true,
@@ -381,10 +382,6 @@ end
 --  Guild Functions
 ----------------------------------------------------------------------
 
--- Flag ob Gildendaten verfügbar sind (wird bei GUILD_ROSTER_UPDATE gesetzt)
-BR.guildDataLoaded = false
-BR.guildDataRequested = false
-
 function BR:IsInGuild()
     return IsInGuild()
 end
@@ -393,28 +390,6 @@ function BR:GetGuildName()
     if not self:IsInGuild() then return nil end
     local guildName = GetGuildInfo("player")
     return guildName
-end
-
--- Fordert Gildendaten vom Server an (wie bei Sauercrowd)
-function BR:RequestGuildRoster()
-    if self.guildDataRequested then return end
-    self.guildDataRequested = true
-    
-    if C_GuildInfo and C_GuildInfo.GuildRoster then
-        C_GuildInfo.GuildRoster()
-        self:Debug("Guild roster requested")
-    end
-end
-
--- Prüft ob Gildendaten verfügbar sind
-function BR:IsGuildDataReady()
-    -- Wenn nicht in Gilde, sind keine Daten nötig
-    if not IsInGuild() then
-        return true
-    end
-    -- Prüfe ob GetGuildInfo funktioniert
-    local guildName = GetGuildInfo("player")
-    return guildName ~= nil
 end
 
 function BR:IsGuildMember(playerName)
@@ -450,11 +425,6 @@ end
 function BR:IsGuildMaster()
     if not self:IsInGuild() then return false end
     local _, _, rankIndex = GetGuildInfo("player")
-    -- rankIndex ist nil wenn Gildendaten noch nicht geladen
-    if rankIndex == nil then
-        self:Debug("IsGuildMaster: rankIndex ist nil - Gildendaten nicht verfügbar")
-        return false
-    end
     return rankIndex == 0
 end
 
@@ -471,7 +441,7 @@ end
 
 function BR:EnableModules()
     for name, module in pairs(self.Modules) do
-        if module.OnEnable then
+        if module.OnEnable and self:GetSetting("Enabled") then
             module:OnEnable()
             self:Debug("Module enabled: " .. name)
         end
@@ -1047,7 +1017,6 @@ BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
 BR.Events:RegisterEvent("PLAYER_LOGOUT")
 BR.Events:RegisterEvent("CHAT_MSG_ADDON")
 BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
-BR.Events:RegisterEvent("PLAYER_GUILD_UPDATE") -- Wichtig: Gildendaten erst hier verfügbar
 
 BR.Events:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -1067,47 +1036,38 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_LOGIN" then
         BR:EnableModules()
         
-        -- Reset tracking flags
+        -- Reset hash response tracking
         BR.receivedGMHash = false
-        BR.guildDataLoaded = false
-        BR.guildDataRequested = false
         
-        -- Fordere Gildendaten nach 2 Sekunden an (wie bei Sauercrowd)
-        C_Timer.After(2, function()
-            BR:RequestGuildRoster()
-        end)
-        
-        C_Timer.After(4, function()
+        C_Timer.After(3, function()
+            -- Request hash first (more efficient than full settings)
+            -- If hash differs, full settings will be requested automatically
             BR:RequestGuildHash()
         end)
-        C_Timer.After(6, function()
+        C_Timer.After(5, function()
             BR:BroadcastStatus()
-            if BR:IsGuildDataReady() and BR:IsGuildMaster() then
-                BR:BroadcastGuildSettings(true)
+            -- If guild master, also broadcast current settings with hash
+            if BR:IsGuildMaster() then
+                BR:BroadcastGuildSettings(true) -- Force hash update on login
             end
         end)
+        -- Ping all guild members after 15 seconds (give time for everything to load)
         C_Timer.After(15, function()
             BR:PingGuildMembers()
         end)
+        -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
+        
+        if BR:GetSetting("Enabled") then
+            BR:Print("Addon aktiviert für diesen Charakter", "info")
+        else
+            BR:Print("Addon ist deaktiviert. Nutze /br enable zum Aktivieren.", "warning")
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
         BR:HandleAddonMessage(...)
-    elseif event == "GUILD_ROSTER_UPDATE" or event == "PLAYER_GUILD_UPDATE" then
-        -- Markiere dass Gildendaten jetzt verfügbar sind
-        if not BR.guildDataLoaded then
-            BR.guildDataLoaded = true
-            BR:Debug("Gildendaten jetzt verfügbar (" .. event .. ")")
-            
-            -- Config-Frame aktualisieren falls offen (nur beim ersten Mal)
-            if BR.configFrame and BR.configFrame:IsShown() then
-                BR:Debug(event .. ": Config wird neu geöffnet")
-                BR.configFrame:Hide()
-                BR:ShowConfig()
-            end
-        end
-        
+    elseif event == "GUILD_ROSTER_UPDATE" then
         -- Refresh guild member cache
         if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
             BR.Modules.GuildCheck:RefreshCache()

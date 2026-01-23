@@ -33,11 +33,11 @@ function CraftingOrderBlock:OnDisable()
 end
 
 function CraftingOrderBlock:Refresh()
-    self.enabled = BR:GetSetting("BlockCraftingOrders") == true
+    self.enabled = BR:GetSetting("Enabled") and BR:GetSetting("BlockCraftingOrders")
 end
 
 function CraftingOrderBlock:ShouldBlock()
-    return self.enabled and BR:GetSetting("BlockCraftingOrders")
+    return self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockCraftingOrders")
 end
 
 function CraftingOrderBlock:NotifyBlocked(orderType)
@@ -107,6 +107,7 @@ function CraftingOrderBlock:HookAPI()
         end
         self.apiHooked = true
         BR:Debug("C_CraftingOrders.PlaceNewOrder hooked successfully")
+        BR:Print("Handwerksaufträge-Block aktiv", "info")
     else
         BR:Debug("C_CraftingOrders.PlaceNewOrder not found")
     end

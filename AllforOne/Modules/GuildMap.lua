@@ -390,13 +390,13 @@ function GuildMap:UpdateMeetingPointPin()
     
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
-    local scale = canvas:GetScale() or 1
     
-    -- Dynamische Pin-Größe: Größer wenn ausgezoomt, kleiner wenn eingezoomt
-    -- Wie bei WoW-Standard-Icons: visuell konstante Größe auf dem Bildschirm
-    local baseSize = 40 -- Basis-Größe in Pixeln
-    local scaleFactor = math.max(0.5, math.min(2.0, 1 / scale))
-    local pinSize = baseSize * scaleFactor
+    -- Dynamische Pin-Größe: kleiner bei Zoom-in, größer bei Zoom-out
+    -- Referenzgröße bei normalem Zoom (~1000px Canvas-Breite)
+    local baseSize = 48
+    local referenceWidth = 1000
+    local scale = referenceWidth / width
+    local pinSize = math.max(24, math.min(64, baseSize * scale))
     pin:SetSize(pinSize, pinSize)
     
     local pinX = displayX * width
@@ -412,21 +412,25 @@ end
 ----------------------------------------------------------------------
 
 function GuildMap:CreateMinimapPin()
-    -- Immer neu erstellen falls es Probleme mit dem alten Pin gibt
+    -- Immer neuen Pin erstellen wenn der alte existiert aber nicht funktioniert
     if self.minimapPin then
-        self.minimapPin:Hide()
+        -- Prüfe ob der Pin noch gültig ist
+        if self.minimapPin:GetParent() == Minimap then
+            return self.minimapPin
+        end
+        -- Pin ist ungültig, neu erstellen
         self.minimapPin = nil
     end
     
-    -- MEDIUM Strata mit niedrigem FrameLevel - sichtbar und interaktiv
+    -- MEDIUM Strata damit der Pin sichtbar ist
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
-    pin:SetSize(24, 24)
+    pin:SetSize(20, 20)
     pin:SetFrameStrata("MEDIUM")
-    pin:SetFrameLevel(5)
+    pin:SetFrameLevel(10)
     pin:EnableMouse(true)
     
     -- AFO Icon
-    local icon = pin:CreateTexture(nil, "ARTWORK")
+    local icon = pin:CreateTexture(nil, "OVERLAY")
     icon:SetTexture(GUILD_MEETING_POINT.icon)
     icon:SetAllPoints()
     icon:SetTexelSnappingBias(0)
