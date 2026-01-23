@@ -15,7 +15,7 @@ local PLAYER_INTERACTION = Enum and Enum.PlayerInteractionType
 
 -- Helpers --------------------------------------------------------------------
 local function ShouldBlock()
-    return BR:GetSetting("Enabled") and BR:GetSetting("BlockAuction")
+    return BR:GetSetting("BlockAuction") == true
 end
 
 local function NotifyBlocked()

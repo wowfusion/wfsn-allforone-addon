@@ -33,11 +33,11 @@ function CraftingOrderBlock:OnDisable()
 end
 
 function CraftingOrderBlock:Refresh()
-    self.enabled = BR:GetSetting("Enabled") and BR:GetSetting("BlockCraftingOrders")
+    self.enabled = BR:GetSetting("BlockCraftingOrders") == true
 end
 
 function CraftingOrderBlock:ShouldBlock()
-    return self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockCraftingOrders")
+    return self.enabled and BR:GetSetting("BlockCraftingOrders")
 end
 
 function CraftingOrderBlock:NotifyBlocked(orderType)

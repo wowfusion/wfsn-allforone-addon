@@ -65,7 +65,11 @@ local function CreateGoldButton(parent, width, height, text)
 end
 
 function Config:CreateFrame()
-    if self.frame then return end
+    -- Frame immer neu erstellen um Gildenmeister-Status korrekt zu prüfen
+    if self.frame then
+        self.frame:Hide()
+        self.frame = nil
+    end
     
     local isGuildMaster = BR:IsGuildMaster()
     local isOfficer = BR:IsGuildOfficer()
@@ -383,16 +387,6 @@ function Config:CreateCheckbox(parent, setting, label, tooltip, isBlockingSettin
         local value = self:GetChecked()
         BR:SetSetting(setting, value, true)
         BR:RefreshModules()
-        
-        if setting == "Enabled" then
-            if value then
-                BR:EnableModules()
-                BR:BroadcastStatus()
-            else
-                BR:DisableModules()
-                BR:BroadcastStatus()
-            end
-        end
         
         -- If this is a blocking setting and user is guild master, broadcast to guild
         if self.isBlockingSetting and BR:IsGuildMaster() then

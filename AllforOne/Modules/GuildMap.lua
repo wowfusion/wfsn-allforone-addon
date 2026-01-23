@@ -390,10 +390,14 @@ function GuildMap:UpdateMeetingPointPin()
     
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
+    local scale = canvas:GetScale() or 1
     
-    -- Feste Pin-Größe unabhängig vom Zoom
-    local baseSize = 48 -- Größere feste Größe in Pixeln
-    pin:SetSize(baseSize, baseSize)
+    -- Dynamische Pin-Größe: Größer wenn ausgezoomt, kleiner wenn eingezoomt
+    -- Wie bei WoW-Standard-Icons: visuell konstante Größe auf dem Bildschirm
+    local baseSize = 40 -- Basis-Größe in Pixeln
+    local scaleFactor = math.max(0.5, math.min(2.0, 1 / scale))
+    local pinSize = baseSize * scaleFactor
+    pin:SetSize(pinSize, pinSize)
     
     local pinX = displayX * width
     local pinY = -displayY * height
@@ -408,13 +412,17 @@ end
 ----------------------------------------------------------------------
 
 function GuildMap:CreateMinimapPin()
-    if self.minimapPin then return self.minimapPin end
+    -- Immer neu erstellen falls es Probleme mit dem alten Pin gibt
+    if self.minimapPin then
+        self.minimapPin:Hide()
+        self.minimapPin = nil
+    end
     
-    -- LOW Strata mit niedrigem FrameLevel - sichtbar aber unter Spielerpfeil
+    -- MEDIUM Strata mit niedrigem FrameLevel - sichtbar und interaktiv
     local pin = CreateFrame("Button", "AllforOneMinimapMeetingPoint", Minimap)
-    pin:SetSize(20, 20)
-    pin:SetFrameStrata("LOW")
-    pin:SetFrameLevel(2)
+    pin:SetSize(24, 24)
+    pin:SetFrameStrata("MEDIUM")
+    pin:SetFrameLevel(5)
     pin:EnableMouse(true)
     
     -- AFO Icon

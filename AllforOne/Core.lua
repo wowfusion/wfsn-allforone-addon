@@ -348,7 +348,6 @@ end
 
 function BR:InitializeDefaults()
     local defaults = {
-        Enabled = true,
         BlockTrade = true,
         BlockGroupInvites = true,
         BlockLFG = true,
@@ -441,7 +440,7 @@ end
 
 function BR:EnableModules()
     for name, module in pairs(self.Modules) do
-        if module.OnEnable and self:GetSetting("Enabled") then
+        if module.OnEnable then
             module:OnEnable()
             self:Debug("Module enabled: " .. name)
         end
@@ -1058,19 +1057,26 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
         
-        if BR:GetSetting("Enabled") then
-            BR:Print("Addon aktiviert für diesen Charakter", "info")
-        else
-            BR:Print("Addon ist deaktiviert. Nutze /br enable zum Aktivieren.", "warning")
-        end
+        -- Gildenmeister-Status wird erst nach GUILD_ROSTER_UPDATE korrekt sein
+        BR.guildDataLoaded = false
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
         BR:HandleAddonMessage(...)
     elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Markiere dass Gildendaten jetzt verfügbar sind
+        BR.guildDataLoaded = true
+        
         -- Refresh guild member cache
         if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
             BR.Modules.GuildCheck:RefreshCache()
+        end
+        
+        -- Config-Frame aktualisieren falls offen
+        if BR.configFrame and BR.configFrame:IsShown() then
+            BR:Debug("GUILD_ROSTER_UPDATE: Config wird neu geöffnet")
+            BR.configFrame:Hide()
+            BR:ShowConfig()
         end
     end
 end)
