@@ -1,0 +1,40 @@
+## Interface: 11508
+## Title: Sauercrowd
+## Notes: Offizielles Addon zum Sauercrowd WoW HC Event
+## Author: Cricksu, Pudi, Canasterzaster
+## Version: 1.0.3
+## SavedVariablesPerCharacter: SauercrowdOptionsDB
+## SavedVariables: SauercrowdTwitchHandles, SauercrowdSessions
+
+libs/LibStub/LibStub.lua
+libs/CallbackHandler-1.0/CallbackHandler-1.0.lua
+libs/LibDataBroker-1.1/LibDataBroker-1.1.lua
+libs/LibDBIcon-1.0/lib.xml
+
+# Core Architecture
+Global.lua
+Constants.lua
+EventManager.lua
+GuildCache.lua
+MiniMapIcon.lua
+
+# Configuration & Rules
+Options.lua
+Rules.lua
+
+# Features
+LevelUp.lua
+Death.lua
+Tooltip.lua
+ChatFilter.lua
+
+# Interfaces
+interfaces\GenericPopup.lua
+interfaces\DeathAnnouncement.lua
+interfaces\Deathlog.lua
+interfaces\WelcomePopUp.lua
+interfaces\PvPFrame.lua
+interfaces\TwitchHandlePrompt.lua
+
+# Initialization
+Main.lua

@@ -381,6 +381,10 @@ end
 --  Guild Functions
 ----------------------------------------------------------------------
 
+-- Flag ob Gildendaten verfügbar sind (wird bei GUILD_ROSTER_UPDATE gesetzt)
+BR.guildDataLoaded = false
+BR.guildDataRequested = false
+
 function BR:IsInGuild()
     return IsInGuild()
 end
@@ -389,6 +393,28 @@ function BR:GetGuildName()
     if not self:IsInGuild() then return nil end
     local guildName = GetGuildInfo("player")
     return guildName
+end
+
+-- Fordert Gildendaten vom Server an (wie bei Sauercrowd)
+function BR:RequestGuildRoster()
+    if self.guildDataRequested then return end
+    self.guildDataRequested = true
+    
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+        self:Debug("Guild roster requested")
+    end
+end
+
+-- Prüft ob Gildendaten verfügbar sind
+function BR:IsGuildDataReady()
+    -- Wenn nicht in Gilde, sind keine Daten nötig
+    if not IsInGuild() then
+        return true
+    end
+    -- Prüfe ob GetGuildInfo funktioniert
+    local guildName = GetGuildInfo("player")
+    return guildName ~= nil
 end
 
 function BR:IsGuildMember(playerName)
@@ -424,6 +450,11 @@ end
 function BR:IsGuildMaster()
     if not self:IsInGuild() then return false end
     local _, _, rankIndex = GetGuildInfo("player")
+    -- rankIndex ist nil wenn Gildendaten noch nicht geladen
+    if rankIndex == nil then
+        self:Debug("IsGuildMaster: rankIndex ist nil - Gildendaten nicht verfügbar")
+        return false
+    end
     return rankIndex == 0
 end
 
@@ -1036,30 +1067,29 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
     elseif event == "PLAYER_LOGIN" then
         BR:EnableModules()
         
-        -- Reset hash response tracking
+        -- Reset tracking flags
         BR.receivedGMHash = false
+        BR.guildDataLoaded = false
+        BR.guildDataRequested = false
         
-        C_Timer.After(3, function()
-            -- Request hash first (more efficient than full settings)
-            -- If hash differs, full settings will be requested automatically
+        -- Fordere Gildendaten nach 2 Sekunden an (wie bei Sauercrowd)
+        C_Timer.After(2, function()
+            BR:RequestGuildRoster()
+        end)
+        
+        C_Timer.After(4, function()
             BR:RequestGuildHash()
         end)
-        C_Timer.After(5, function()
+        C_Timer.After(6, function()
             BR:BroadcastStatus()
-            -- If guild master, also broadcast current settings with hash
-            if BR:IsGuildMaster() then
-                BR:BroadcastGuildSettings(true) -- Force hash update on login
+            if BR:IsGuildDataReady() and BR:IsGuildMaster() then
+                BR:BroadcastGuildSettings(true)
             end
         end)
-        -- Ping all guild members after 15 seconds (give time for everything to load)
         C_Timer.After(15, function()
             BR:PingGuildMembers()
         end)
-        -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
-        
-        -- Gildenmeister-Status wird erst nach GUILD_ROSTER_UPDATE korrekt sein
-        BR.guildDataLoaded = false
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then

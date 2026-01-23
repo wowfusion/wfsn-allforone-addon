@@ -71,11 +71,13 @@ function Config:CreateFrame()
         self.frame = nil
     end
     
-    -- Warte auf Gildendaten bevor Config geöffnet wird
-    if not BR.guildDataLoaded and IsInGuild() then
+    -- Warte auf Gildendaten bevor Config geöffnet wird (wie bei Sauercrowd)
+    if not BR:IsGuildDataReady() then
         BR:Print("Gildendaten werden geladen... Bitte kurz warten.", "info")
-        -- Versuche nach 1 Sekunde erneut
-        C_Timer.After(1, function()
+        -- Fordere Gildendaten an falls noch nicht geschehen
+        BR:RequestGuildRoster()
+        -- Versuche nach 1.5 Sekunden erneut
+        C_Timer.After(1.5, function()
             BR:ShowConfig()
         end)
         return
