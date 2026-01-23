@@ -504,6 +504,11 @@ end
 
 function AdminPanel:Show()
     -- Only officers can access this panel
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    if not BR:IsGuildDataReady() then
+        BR:Print("Guild-Daten werden noch geladen. Bitte versuche es in wenigen Sekunden erneut.", "warning")
+        return
+    end
     if not BR:IsGuildOfficer() then
         BR:Print("Die Offizier-Übersicht ist nur für Gildenoffiziere verfügbar.", "warning")
         return

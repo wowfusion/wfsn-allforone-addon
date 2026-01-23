@@ -67,8 +67,9 @@ end
 function Config:CreateFrame()
     if self.frame then return end
     
-    local isGuildMaster = BR:IsGuildMaster()
-    local isOfficer = BR:IsGuildOfficer()
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
+    local isOfficer = BR:IsGuildDataReady() and BR:IsGuildOfficer() or false
     local frameHeight = (isGuildMaster or isOfficer) and 615 or 575
     
     -- Main frame
@@ -110,12 +111,24 @@ function Config:CreateFrame()
     -- Funktion zum Aktualisieren des Gildennamens
     local function UpdateGuildInfo()
         local playerName = UnitName("player")
-        infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (BR:GetGuildName() or "Keine Gilde") .. "|r")
+        local guildName = BR:GetGuildName()
+        if not guildName and BR:IsInGuild() then
+            guildName = "Lade..."
+        end
+        infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (guildName or "Keine Gilde") .. "|r")
     end
     UpdateGuildInfo()
     
     -- OnShow aktualisiert den Gildennamen
     frame:HookScript("OnShow", UpdateGuildInfo)
+    
+    -- Registriere für GUILD_ROSTER_UPDATE um Gildennamen zu aktualisieren
+    frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    frame:SetScript("OnEvent", function(self, event)
+        if event == "GUILD_ROSTER_UPDATE" then
+            UpdateGuildInfo()
+        end
+    end)
     
     -- Separator
     local sep1 = frame:CreateTexture(nil, "ARTWORK")
@@ -227,10 +240,10 @@ function Config:CreateFrame()
     local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSlider", frame, "OptionsSliderTemplate")
     pinSizeSlider:SetPoint("TOPLEFT", 25, yOffset - 18)
     pinSizeSlider:SetSize(200, 16)
-    pinSizeSlider:SetMinMaxValues(16, 64)
-    pinSizeSlider:SetValueStep(4)
+    pinSizeSlider:SetMinMaxValues(10, 64)
+    pinSizeSlider:SetValueStep(2)
     pinSizeSlider:SetObeyStepOnDrag(true)
-    pinSizeSlider.Low:SetText("16")
+    pinSizeSlider.Low:SetText("10")
     pinSizeSlider.High:SetText("64")
     pinSizeSlider.Text:SetText("")
     
@@ -444,12 +457,14 @@ function Config:RefreshCheckboxes()
 end
 
 function Config:Show()
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
+    local isOfficer = BR:IsGuildDataReady() and BR:IsGuildOfficer() or false
+    
     -- Recreate frame if guild master or officer status may have changed
     if self.frame then
         local wasGuildMaster = self.wasGuildMaster
         local wasOfficer = self.wasOfficer
-        local isGuildMaster = BR:IsGuildMaster()
-        local isOfficer = BR:IsGuildOfficer()
         if wasGuildMaster ~= isGuildMaster or wasOfficer ~= isOfficer then
             self.frame:Hide()
             self.frame = nil
@@ -460,8 +475,8 @@ function Config:Show()
     
     if not self.frame then
         self:CreateFrame()
-        self.wasGuildMaster = BR:IsGuildMaster()
-        self.wasOfficer = BR:IsGuildOfficer()
+        self.wasGuildMaster = isGuildMaster
+        self.wasOfficer = isOfficer
     end
     
     self:RefreshCheckboxes()
@@ -516,13 +531,24 @@ local function CreateInterfaceOptionsPanel()
     -- Funktion zum Aktualisieren des Gildennamens
     local function UpdateCharInfo()
         local playerName = UnitName("player")
-        local guildName = BR:GetGuildName() or "Keine Gilde"
-        charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. guildName .. "|r")
+        local guildName = BR:GetGuildName()
+        if not guildName and BR:IsInGuild() then
+            guildName = "Lade..."
+        end
+        charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. (guildName or "Keine Gilde") .. "|r")
     end
     UpdateCharInfo()
     
     -- OnShow aktualisiert den Gildennamen (falls beim Login noch nicht verfügbar)
     panel:HookScript("OnShow", UpdateCharInfo)
+    
+    -- Registriere für GUILD_ROSTER_UPDATE um Gildennamen zu aktualisieren
+    panel:RegisterEvent("GUILD_ROSTER_UPDATE")
+    panel:HookScript("OnEvent", function(self, event)
+        if event == "GUILD_ROSTER_UPDATE" then
+            UpdateCharInfo()
+        end
+    end)
     
     -- Separator after banner
     local sepBanner = scrollChild:CreateTexture(nil, "ARTWORK")
@@ -544,7 +570,8 @@ local function CreateInterfaceOptionsPanel()
     sep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
     
     -- Status section
-    local isGuildMaster = BR:IsGuildMaster()
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
     
     local statusTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     statusTitle:SetPoint("TOPLEFT", sep, "LEFT", 16, -15)
@@ -604,6 +631,7 @@ local function CreateInterfaceOptionsPanel()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
+        {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }
     
     for _, setting in ipairs(settings) do
@@ -725,10 +753,10 @@ local function CreateInterfaceOptionsPanel()
     local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSliderOptions", pinSizeRow, "OptionsSliderTemplate")
     pinSizeSlider:SetPoint("TOPLEFT", pinSizeLabel, "BOTTOMLEFT", 0, -8)
     pinSizeSlider:SetSize(200, 16)
-    pinSizeSlider:SetMinMaxValues(16, 64)
-    pinSizeSlider:SetValueStep(4)
+    pinSizeSlider:SetMinMaxValues(10, 64)
+    pinSizeSlider:SetValueStep(2)
     pinSizeSlider:SetObeyStepOnDrag(true)
-    pinSizeSlider.Low:SetText("16")
+    pinSizeSlider.Low:SetText("10")
     pinSizeSlider.High:SetText("64")
     pinSizeSlider.Text:SetText("")
     

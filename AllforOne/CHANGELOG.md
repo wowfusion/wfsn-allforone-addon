@@ -2,6 +2,30 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.4] - 2026-01-23
+
+### Neu
+- **Gildenkalender-Integration**: Der Gildentreffpunkt-Tooltip zeigt jetzt das nächste geplante Gildenmeeting an
+  - Liest automatisch Gilden-Events aus dem WoW-Kalender aus
+  - Zeigt Titel, Datum und Uhrzeit des nächsten Meetings
+  - Funktioniert auf Weltkarte und Minimap
+
+### Behoben
+- **Gildenleiter-Einstellungen beim Login**: Gildenmeister und Offiziere können jetzt direkt nach dem Einloggen ihre Einstellungen ändern und synchronisieren
+- **Gildenname in den Optionen**: Der Gildenname wird jetzt korrekt angezeigt, auch direkt nach dem Login (vorher wurde "Keine Gilde" angezeigt)
+- **Neue WoW API Kompatibilität**: Das Addon wartet jetzt korrekt auf das Laden der Gildendaten bevor Guild-Funktionen verwendet werden
+  - Verwendet `C_GuildInfo.GuildRoster()` für die neue API
+  - Reagiert auf `GUILD_ROSTER_UPDATE` und `PLAYER_GUILD_UPDATE` Events
+  - Einstellungsfenster aktualisiert sich automatisch wenn Gildendaten verfügbar werden
+- **Himmelsreiten-Sperre komplett überarbeitet**:
+  - Die Option kann jetzt vom Gildenmeister in den Einstellungen aktiviert/deaktiviert werden
+  - Erkennt jetzt zuverlässig ob Statisches Fliegen oder Himmelsreiten aktiv ist
+  - Prüft Flugstil-Buffs (Spell IDs 404464/404468) und CVar
+  - Neues Popup mit direktem "Auf Statisch wechseln" Button
+  - Der Button castet den Spell "Flugstil wechseln" direkt
+- **Gildenkarten Pin-Größe**: Pins werden jetzt auf allen Karten gleich groß angezeigt (unabhängig vom Zoom)
+  - Pin-Größe kann jetzt von 10px bis 64px eingestellt werden
+
 ## [1.0.3] - 2026-01-22
 
 ### Neu
