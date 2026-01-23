@@ -238,13 +238,18 @@ function GuildMap:UpdatePinPosition(pin, mapID, x, y, memberName)
     -- Position auf der Karte berechnen
     local canvas = WorldMapFrame:GetCanvas()
     local width, height = canvas:GetSize()
+    local canvasScale = canvas:GetScale() or 1
     
     local pinX = displayX * width
     local pinY = -displayY * height
     
-    -- Pin-Größe direkt vom Slider (ohne Scale-Anpassung für einfachere Kontrolle)
-    local pinSize = GetPinSize()
-    local fontSize = math.max(8, pinSize * 0.5)
+    -- Pin-Größe mit Canvas-Scale normalisieren (damit Pins auf allen Karten gleich groß sind)
+    local basePinSize = GetPinSize()
+    
+    -- Normalisiere die Pin-Größe basierend auf der Canvas-Scale
+    -- Kleinere Scale = größere Karte = Pin muss kleiner sein um gleich groß zu erscheinen
+    local pinSize = basePinSize / canvasScale
+    local fontSize = math.max(8, (basePinSize * 0.5) / canvasScale)
     
     pin:SetSize(pinSize, pinSize)
     
@@ -254,7 +259,7 @@ function GuildMap:UpdatePinPosition(pin, mapID, x, y, memberName)
         pin.border:SetSize(borderSize, borderSize)
     end
     
-    pin.nameText:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
+    pin.nameText:SetFont("Fonts\\FRIZQT__.TTF", math.max(8, fontSize), "OUTLINE")
     
     pin:ClearAllPoints()
     pin:SetPoint("CENTER", canvas, "TOPLEFT", pinX, pinY)
@@ -306,6 +311,121 @@ end
 --  Gildentreffpunkt-Marker
 ----------------------------------------------------------------------
 
+-- Holt das nächste Gilden-Event aus dem Kalender
+function GuildMap:GetNextGuildEvent()
+    if not C_Calendar then return nil end
+    
+    -- Öffne den Kalender (notwendig um Events zu laden)
+    C_Calendar.OpenCalendar()
+    
+    local currentDate = C_DateAndTime.GetCurrentCalendarTime()
+    if not currentDate then return nil end
+    
+    local bestEvent = nil
+    local bestTime = nil
+    
+    -- Durchsuche die nächsten 30 Tage
+    for dayOffset = 0, 30 do
+        local checkMonth = currentDate.month
+        local checkDay = currentDate.monthDay + dayOffset
+        local checkYear = currentDate.year
+        
+        -- Monatswechsel behandeln
+        local daysInMonth = C_Calendar.GetMonthInfo(0).numDays or 31
+        while checkDay > daysInMonth do
+            checkDay = checkDay - daysInMonth
+            checkMonth = checkMonth + 1
+            if checkMonth > 12 then
+                checkMonth = 1
+                checkYear = checkYear + 1
+            end
+            -- Hole neue Anzahl Tage für den neuen Monat
+            local monthOffset = (checkMonth - currentDate.month) + (checkYear - currentDate.year) * 12
+            local monthInfo = C_Calendar.GetMonthInfo(monthOffset)
+            daysInMonth = monthInfo and monthInfo.numDays or 31
+        end
+        
+        -- Setze den Kalender auf diesen Tag
+        local monthOffset = (checkMonth - currentDate.month) + (checkYear - currentDate.year) * 12
+        C_Calendar.SetAbsMonth(checkMonth, checkYear)
+        
+        -- Hole Events für diesen Tag
+        local numEvents = C_Calendar.GetNumDayEvents(0, checkDay)
+        
+        for i = 1, numEvents do
+            local event = C_Calendar.GetDayEvent(0, checkDay, i)
+            if event then
+                -- Debug: Zeige Event-Informationen
+                BR:Debug(string.format("GuildMap Event: title='%s', calendarType='%s', eventType=%s", 
+                    tostring(event.title), 
+                    tostring(event.calendarType), 
+                    tostring(event.eventType)))
+                
+                -- Prüfe ob es ein Gilden-Event ist (calendarType == "GUILD_EVENT" oder "GUILD")
+                local isGuildEvent = event.calendarType == "GUILD_EVENT" or 
+                                     event.calendarType == "GUILD" or
+                                     event.calendarType == "GUILD_ANNOUNCEMENT"
+                
+                -- Filter: Nur Events mit "Gildenmeeting" im Titel (case-insensitive)
+                local hasGuildmeetingTitle = event.title and string.find(string.lower(event.title), "gildenmeeting")
+                
+                if isGuildEvent and hasGuildmeetingTitle and event.sequenceType ~= "END" then
+                    -- Berechne den Zeitstempel für Vergleich
+                    local eventTime = time({
+                        year = checkYear,
+                        month = checkMonth,
+                        day = checkDay,
+                        hour = event.startTime and event.startTime.hour or 0,
+                        min = event.startTime and event.startTime.minute or 0
+                    })
+                    
+                    local now = time()
+                    
+                    -- Nur zukünftige Events
+                    if eventTime > now then
+                        if not bestTime or eventTime < bestTime then
+                            bestTime = eventTime
+                            bestEvent = {
+                                title = event.title,
+                                day = checkDay,
+                                month = checkMonth,
+                                year = checkYear,
+                                hour = event.startTime and event.startTime.hour or 0,
+                                minute = event.startTime and event.startTime.minute or 0,
+                            }
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Wenn wir ein Event gefunden haben, können wir aufhören
+        if bestEvent then break end
+    end
+    
+    return bestEvent
+end
+
+-- Formatiert das Event-Datum für die Anzeige
+function GuildMap:FormatEventDate(event)
+    if not event then return nil end
+    
+    local dayNames = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"}
+    local monthNames = {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"}
+    
+    -- Wochentag berechnen
+    local timestamp = time({year = event.year, month = event.month, day = event.day, hour = 12})
+    local weekday = tonumber(date("%w", timestamp)) + 1 -- Lua: 0=So, wir wollen 1=So
+    
+    return string.format("%s, %d. %s %02d:%02d Uhr",
+        dayNames[weekday],
+        event.day,
+        monthNames[event.month],
+        event.hour,
+        event.minute
+    )
+end
+
 function GuildMap:CreateMeetingPointPin()
     if self.meetingPointPin then return self.meetingPointPin end
     
@@ -319,12 +439,24 @@ function GuildMap:CreateMeetingPointPin()
     icon:SetAllPoints()
     pin.icon = icon
     
-    -- Tooltip
+    -- Tooltip mit Gildenkalender-Integration
     pin:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:ClearLines()
         GameTooltip:AddLine("|cFFFFCC00" .. GUILD_MEETING_POINT.name .. "|r", 1, 1, 1)
         GameTooltip:AddLine(" ")
+        
+        -- Nächstes Gilden-Event anzeigen
+        local nextEvent = GuildMap:GetNextGuildEvent()
+        if nextEvent then
+            GameTooltip:AddLine("|cFF00FF00Nächstes Gildenmeeting:|r", 0, 1, 0)
+            GameTooltip:AddLine("|cFFAAAAAA" .. GuildMap:FormatEventDate(nextEvent) .. "|r", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(" ")
+        else
+            GameTooltip:AddLine("|cFF888888Kein Gildenmeeting geplant|r", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine(" ")
+        end
+        
         GameTooltip:AddLine("All for One Gildentreffpunkt", 0.7, 0.7, 0.7)
         GameTooltip:AddLine("Gründerspitze", 0.5, 0.5, 0.5)
         GameTooltip:Show()
@@ -435,11 +567,24 @@ function GuildMap:CreateMinimapPin()
     icon:SetSnapToPixelGrid(false)
     pin.icon = icon
     
-    -- Tooltip
+    -- Tooltip mit Gildenkalender-Integration
     pin:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:ClearLines()
         GameTooltip:AddLine("|cFFFFCC00" .. GUILD_MEETING_POINT.name .. "|r", 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        
+        -- Nächstes Gilden-Event anzeigen
+        local nextEvent = GuildMap:GetNextGuildEvent()
+        if nextEvent then
+            GameTooltip:AddLine("|cFF00FF00Nächstes Gildenmeeting:|r", 0, 1, 0)
+            GameTooltip:AddLine("|cFFAAAAAA" .. GuildMap:FormatEventDate(nextEvent) .. "|r", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(" ")
+        else
+            GameTooltip:AddLine("|cFF888888Kein Gildenmeeting geplant|r", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine(" ")
+        end
+        
         GameTooltip:AddLine("All for One Gildentreffpunkt", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)

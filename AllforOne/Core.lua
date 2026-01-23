@@ -14,6 +14,7 @@ _G.AllforOneCharDB = _G.AllforOneCharDB or {}
 -- Local references (Colors, Backdrops, etc. are defined in Constants.lua)
 BR.Modules = {}
 BR.Events = CreateFrame("Frame")
+BR.GuildDataReady = false -- Flag ob Guild-Daten geladen sind
 
 ----------------------------------------------------------------------
 --  Utility Functions
@@ -392,6 +393,23 @@ function BR:GetGuildName()
     return guildName
 end
 
+-- Fordert Guild-Roster Update an (neue API)
+function BR:RequestGuildRoster()
+    if not self:IsInGuild() then return end
+    -- Neue API: C_GuildInfo.GuildRoster() ersetzt GuildRoster()
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    elseif GuildRoster then
+        GuildRoster()
+    end
+end
+
+-- Prüft ob Guild-Daten bereit sind
+function BR:IsGuildDataReady()
+    if not self:IsInGuild() then return true end -- Keine Gilde = immer "bereit"
+    return self.GuildDataReady
+end
+
 function BR:IsGuildMember(playerName)
     if not self:IsInGuild() then return false end
     
@@ -416,6 +434,11 @@ end
 
 function BR:IsGuildOfficer()
     if not self:IsInGuild() then return false end
+    -- Warte auf Guild-Daten
+    if not self.GuildDataReady then
+        self:Debug("IsGuildOfficer: Guild-Daten noch nicht bereit")
+        return false
+    end
     local _, _, rankIndex = GetGuildInfo("player")
     -- Rank 0 = Guild Master, Rank 1 = typically first officer rank
     -- We consider ranks 0 and 1 as officers, but this may vary per guild
@@ -424,6 +447,11 @@ end
 
 function BR:IsGuildMaster()
     if not self:IsInGuild() then return false end
+    -- Warte auf Guild-Daten
+    if not self.GuildDataReady then
+        self:Debug("IsGuildMaster: Guild-Daten noch nicht bereit")
+        return false
+    end
     local _, _, rankIndex = GetGuildInfo("player")
     return rankIndex == 0
 end
@@ -1017,6 +1045,7 @@ BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
 BR.Events:RegisterEvent("PLAYER_LOGOUT")
 BR.Events:RegisterEvent("CHAT_MSG_ADDON")
 BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
+BR.Events:RegisterEvent("PLAYER_GUILD_UPDATE") -- Wird gefeuert wenn Gildenstatus sich ändert
 
 BR.Events:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -1038,23 +1067,19 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         
         -- Reset hash response tracking
         BR.receivedGMHash = false
+        BR.GuildDataReady = false -- Reset beim Login
+        BR.guildInitDone = false -- Flag um doppelte Initialisierung zu verhindern
         
-        C_Timer.After(3, function()
-            -- Request hash first (more efficient than full settings)
-            -- If hash differs, full settings will be requested automatically
-            BR:RequestGuildHash()
-        end)
-        C_Timer.After(5, function()
-            BR:BroadcastStatus()
-            -- If guild master, also broadcast current settings with hash
-            if BR:IsGuildMaster() then
-                BR:BroadcastGuildSettings(true) -- Force hash update on login
-            end
-        end)
-        -- Ping all guild members after 15 seconds (give time for everything to load)
-        C_Timer.After(15, function()
-            BR:PingGuildMembers()
-        end)
+        -- Fordere Guild-Roster an (neue API)
+        if BR:IsInGuild() then
+            BR:RequestGuildRoster()
+        else
+            BR.GuildDataReady = true -- Keine Gilde = sofort bereit
+        end
+        
+        -- Warte auf Guild-Daten bevor wir Guild-spezifische Aktionen ausführen
+        -- Die eigentliche Initialisierung passiert in GUILD_ROSTER_UPDATE
+        
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
         
@@ -1068,9 +1093,54 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
     elseif event == "CHAT_MSG_ADDON" then
         BR:HandleAddonMessage(...)
     elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Guild-Daten sind jetzt verfügbar
+        local wasReady = BR.GuildDataReady
+        BR.GuildDataReady = true
+        
         -- Refresh guild member cache
         if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
             BR.Modules.GuildCheck:RefreshCache()
+        end
+        
+        -- Einmalige Initialisierung nach dem ersten GUILD_ROSTER_UPDATE
+        if not BR.guildInitDone and BR:IsInGuild() then
+            BR.guildInitDone = true
+            BR:Debug("Guild-Daten geladen - starte Guild-Initialisierung")
+            
+            -- Jetzt können wir Guild-spezifische Aktionen ausführen
+            C_Timer.After(1, function()
+                -- Request hash first (more efficient than full settings)
+                BR:RequestGuildHash()
+            end)
+            C_Timer.After(3, function()
+                BR:BroadcastStatus()
+                -- If guild master, also broadcast current settings with hash
+                if BR:IsGuildMaster() then
+                    BR:BroadcastGuildSettings(true) -- Force hash update on login
+                end
+            end)
+            -- Ping all guild members after 10 seconds
+            C_Timer.After(10, function()
+                BR:PingGuildMembers()
+            end)
+            
+            -- Refresh Config Panel falls offen
+            if BR.Modules.Config and BR.Modules.Config.frame and BR.Modules.Config.frame:IsShown() then
+                BR.Modules.Config.frame:Hide()
+                BR.Modules.Config.frame = nil
+                BR.Modules.Config.checkboxes = {}
+                BR.Modules.Config.infoLabels = {}
+                BR.Modules.Config:Show()
+            end
+        end
+    elseif event == "PLAYER_GUILD_UPDATE" then
+        -- Spieler ist einer Gilde beigetreten oder hat sie verlassen
+        BR.GuildDataReady = false
+        BR.guildInitDone = false
+        if BR:IsInGuild() then
+            BR:RequestGuildRoster()
+        else
+            BR.GuildDataReady = true
         end
     end
 end)
