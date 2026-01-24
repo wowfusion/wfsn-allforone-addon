@@ -18,7 +18,7 @@ local BUFF_SKYRIDING = 404464      -- Flugstil: Himmelsreiten
 local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 
 -- Max Level ist fest auf 80 gesetzt
-local MAX_LEVEL = 90
+local MAX_LEVEL = 80
 
 -- CVar für Flugstil (0 = Steady, 1 = Skyriding)
 local CVAR_FLIGHT_STYLE = "dynamicFlightMountedOption"
