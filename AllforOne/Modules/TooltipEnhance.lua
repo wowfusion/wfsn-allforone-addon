@@ -197,22 +197,30 @@ function TooltipEnhance:HookTooltip()
     -- Use TooltipDataProcessor for retail (modern API)
     if TooltipDataProcessor then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
-            if tooltip ~= GameTooltip then return end
+            -- Sichere Prüfungen um Fehler zu vermeiden
+            if not tooltip or tooltip ~= GameTooltip then return end
             
-            local _, unit = tooltip:GetUnit()
-            if not unit then return end
+            -- Verwende pcall für alle Unit-Operationen um "secret value" Fehler zu vermeiden
+            local unit
+            local success = pcall(function()
+                local _, u = tooltip:GetUnit()
+                if u and UnitExists(u) and UnitIsPlayer(u) then
+                    unit = u
+                end
+            end)
             
-            -- Only for players
-            if not UnitIsPlayer(unit) then return end
+            if not success or not unit then return end
             
             local playerName = UnitName(unit)
             if not playerName then return end
             
-            -- Check if in same guild
-            -- Methode 1: UnitIsInMyGuild ist am zuverlässigsten
-            local isInMyGuild = UnitIsInMyGuild(unit)
-            local unitGuild = GetGuildInfo(unit)
-            local myGuild = GetGuildInfo("player")
+            -- Check if in same guild (alles in pcall um Fehler zu vermeiden)
+            local isInMyGuild, unitGuild, myGuild
+            pcall(function()
+                isInMyGuild = UnitIsInMyGuild(unit)
+                unitGuild = GetGuildInfo(unit)
+                myGuild = GetGuildInfo("player")
+            end)
             
             if isInMyGuild or (unitGuild and myGuild and unitGuild == myGuild) then
                 -- Same guild - show addon status and faction background

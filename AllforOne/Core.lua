@@ -410,43 +410,69 @@ function BR:IsGuildDataReady()
     return self.GuildDataReady
 end
 
-function BR:IsGuildMember(playerName)
+function BR:IsGuildMember(playerNameOrUnit)
     if not self:IsInGuild() then 
         self:Debug("IsGuildMember: Spieler ist nicht in einer Gilde")
         return false 
     end
     
-    -- Remove realm name if present
-    local name = playerName
-    if name then
-        name = strsplit("-", name)
-    end
-    
-    if not name or name == "" then
+    local inputName = playerNameOrUnit
+    if not inputName or inputName == "" then
         self:Debug("IsGuildMember: Kein gültiger Spielername")
         return false
     end
     
-    -- Methode 1: UnitIsInMyGuild (funktioniert für Spieler in Reichweite/Target)
-    -- Dies ist die zuverlässigste Methode für Spieler die man sehen kann
-    if UnitIsInMyGuild then
-        local isInGuild = UnitIsInMyGuild(name)
+    -- Methode 1: Prüfe ob es eine Unit-ID ist (z.B. "target", "party1", etc.)
+    -- UnitIsInMyGuild funktioniert am besten mit Unit-IDs
+    if UnitExists(inputName) then
+        local isInGuild = UnitIsInMyGuild(inputName)
+        self:Debug("IsGuildMember: UnitIsInMyGuild(" .. inputName .. ") = " .. tostring(isInGuild))
         if isInGuild then
-            self:Debug("IsGuildMember: " .. name .. " ist Gildenmitglied (UnitIsInMyGuild)")
             return true
         end
     end
     
-    -- Methode 2: Gildenliste durchsuchen
+    -- Remove realm name if present for name comparison
+    local name = inputName
+    if name then
+        name = strsplit("-", name)
+    end
+    
+    -- Methode 2: Versuche UnitIsInMyGuild mit dem Namen
+    -- Dies funktioniert wenn der Spieler in Reichweite ist
+    if UnitIsInMyGuild then
+        -- Versuche verschiedene Unit-IDs
+        local unitsToCheck = {"target", "focus", "mouseover"}
+        for i = 1, 4 do
+            table.insert(unitsToCheck, "party" .. i)
+            table.insert(unitsToCheck, "raid" .. i)
+        end
+        
+        for _, unit in ipairs(unitsToCheck) do
+            if UnitExists(unit) then
+                local unitName = UnitName(unit)
+                if unitName and unitName:lower() == name:lower() then
+                    local isInGuild = UnitIsInMyGuild(unit)
+                    self:Debug("IsGuildMember: " .. name .. " gefunden als " .. unit .. ", UnitIsInMyGuild = " .. tostring(isInGuild))
+                    if isInGuild then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Methode 3: Gildenliste durchsuchen (inkl. Offline-Mitglieder)
     -- Stelle sicher dass die Gildenliste geladen ist
     if C_GuildInfo and C_GuildInfo.GuildRoster then
         C_GuildInfo.GuildRoster()
     end
     
-    local numMembers = GetNumGuildMembers()
-    self:Debug("IsGuildMember: Prüfe " .. name .. " gegen " .. numMembers .. " Gildenmitglieder")
+    -- Hole ALLE Gildenmitglieder (inkl. Offline)
+    local numTotal, numOnline = GetNumGuildMembers()
+    self:Debug("IsGuildMember: Prüfe " .. name .. " gegen " .. numTotal .. " Gildenmitglieder (" .. numOnline .. " online)")
     
-    for i = 1, numMembers do
+    for i = 1, numTotal do
         local guildMemberName = GetGuildRosterInfo(i)
         if guildMemberName then
             local guildMemberShort = strsplit("-", guildMemberName)
@@ -457,7 +483,7 @@ function BR:IsGuildMember(playerName)
         end
     end
     
-    self:Debug("IsGuildMember: " .. name .. " ist KEIN Gildenmitglied")
+    self:Debug("IsGuildMember: " .. name .. " ist KEIN Gildenmitglied (nicht in " .. numTotal .. " Mitgliedern gefunden)")
     return false
 end
 
