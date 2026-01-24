@@ -2,7 +2,7 @@
 # Copies the addon to your World of Warcraft AddOns folder
 
 param(
-    [string]$WoWPath = "D:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns",
+    [string]$WoWPath = "D:\Programme\World of Warcraft\_retail_\Interface\AddOns",
     [string]$SourcePath
 )
 
