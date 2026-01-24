@@ -12,18 +12,22 @@ local Config = {
 }
 
 function BR:OpenConfig()
-    -- Open WoW Interface Options -> AddOns -> AllforOne
-    if Settings and Settings.OpenToCategory then
-        if BR.settingsCategory then
-            Settings.OpenToCategory(BR.settingsCategory:GetID())
-        else
-            -- Fallback: try to find by name
-            Settings.OpenToCategory("AllforOne")
+    -- Verzögere den Aufruf um Combat Lockdown zu vermeiden
+    -- OpenSettingsPanel ist eine geschützte Funktion
+    C_Timer.After(0, function()
+        -- Open WoW Interface Options -> AddOns -> AllforOne
+        if Settings and Settings.OpenToCategory then
+            if BR.settingsCategory then
+                Settings.OpenToCategory(BR.settingsCategory:GetID())
+            else
+                -- Fallback: try to find by name
+                Settings.OpenToCategory("AllforOne")
+            end
+        elseif InterfaceOptionsFrame_OpenToCategory then
+            InterfaceOptionsFrame_OpenToCategory("AllforOne")
+            InterfaceOptionsFrame_OpenToCategory("AllforOne") -- Call twice for subcategories
         end
-    elseif InterfaceOptionsFrame_OpenToCategory then
-        InterfaceOptionsFrame_OpenToCategory("AllforOne")
-        InterfaceOptionsFrame_OpenToCategory("AllforOne") -- Call twice for subcategories
-    end
+    end)
 end
 
 -- Helper function to create gold-styled button
@@ -63,9 +67,10 @@ end
 function Config:CreateFrame()
     if self.frame then return end
     
-    local isGuildMaster = BR:IsGuildMaster()
-    local isOfficer = BR:IsGuildOfficer()
-    local frameHeight = (isGuildMaster or isOfficer) and 545 or 505
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
+    local isOfficer = BR:IsGuildDataReady() and BR:IsGuildOfficer() or false
+    local frameHeight = (isGuildMaster or isOfficer) and 615 or 575
     
     -- Main frame
     local frame = CreateFrame("Frame", "AllforOneConfigPanel", UIParent, "BackdropTemplate")
@@ -102,8 +107,28 @@ function Config:CreateFrame()
     -- Character & Guild info
     local infoText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     infoText:SetPoint("TOP", version, "BOTTOM", 0, -8)
-    local playerName = UnitName("player")
-    infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (BR:GetGuildName() or "Keine Gilde") .. "|r")
+    
+    -- Funktion zum Aktualisieren des Gildennamens
+    local function UpdateGuildInfo()
+        local playerName = UnitName("player")
+        local guildName = BR:GetGuildName()
+        if not guildName and BR:IsInGuild() then
+            guildName = "Lade..."
+        end
+        infoText:SetText(BR.Colors.White .. playerName .. "|r - " .. BR.Colors.Guild .. (guildName or "Keine Gilde") .. "|r")
+    end
+    UpdateGuildInfo()
+    
+    -- OnShow aktualisiert den Gildennamen
+    frame:HookScript("OnShow", UpdateGuildInfo)
+    
+    -- Registriere für GUILD_ROSTER_UPDATE um Gildennamen zu aktualisieren
+    frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+    frame:SetScript("OnEvent", function(self, event)
+        if event == "GUILD_ROSTER_UPDATE" then
+            UpdateGuildInfo()
+        end
+    end)
     
     -- Separator
     local sep1 = frame:CreateTexture(nil, "ARTWORK")
@@ -134,6 +159,7 @@ function Config:CreateFrame()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
+        {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }
     
     for _, setting in ipairs(blockSettings) do
@@ -200,6 +226,65 @@ function Config:CreateFrame()
     
     local debugBox = self:CreateCheckbox(frame, "DebugMode", "Debug-Modus", "")
     debugBox:SetPoint("TOPLEFT", 25, yOffset)
+    
+    yOffset = yOffset - 30
+    
+    -- GuildMap Pin-Größe Slider
+    local pinSizeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pinSizeLabel:SetPoint("TOPLEFT", 25, yOffset)
+    pinSizeLabel:SetText("Gildenkarten Pin-Größe:")
+    
+    local pinSizeValue = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pinSizeValue:SetPoint("LEFT", pinSizeLabel, "RIGHT", 5, 0)
+    
+    local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSlider", frame, "OptionsSliderTemplate")
+    pinSizeSlider:SetPoint("TOPLEFT", 25, yOffset - 18)
+    pinSizeSlider:SetSize(200, 16)
+    pinSizeSlider:SetMinMaxValues(10, 64)
+    pinSizeSlider:SetValueStep(2)
+    pinSizeSlider:SetObeyStepOnDrag(true)
+    pinSizeSlider.Low:SetText("10")
+    pinSizeSlider.High:SetText("64")
+    pinSizeSlider.Text:SetText("")
+    
+    local currentSize = BR:GetSetting("GuildMapPinSize") or 32
+    pinSizeSlider:SetValue(currentSize)
+    pinSizeValue:SetText(currentSize)
+    
+    pinSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        pinSizeValue:SetText(value)
+        BR:SetSetting("GuildMapPinSize", value, true)
+        -- Pins neu zeichnen
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    yOffset = yOffset - 40
+    
+    -- Reset Button
+    local resetBtn = CreateGoldButton(frame, 200, 28, "Einstellungen zurücksetzen")
+    resetBtn:SetPoint("TOPLEFT", 25, yOffset - 10)
+    resetBtn:SetScript("OnClick", function()
+        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
+            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
+            button1 = "Ja, zurücksetzen",
+            button2 = "Abbrechen",
+            OnAccept = function()
+                BR:ResetSettings(function(success)
+                    if Config.frame and Config.frame:IsShown() then
+                        Config:RefreshCheckboxes()
+                    end
+                end)
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
+    end)
     
     -- Bottom separator
     local sep3 = frame:CreateTexture(nil, "ARTWORK")
@@ -372,12 +457,14 @@ function Config:RefreshCheckboxes()
 end
 
 function Config:Show()
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
+    local isOfficer = BR:IsGuildDataReady() and BR:IsGuildOfficer() or false
+    
     -- Recreate frame if guild master or officer status may have changed
     if self.frame then
         local wasGuildMaster = self.wasGuildMaster
         local wasOfficer = self.wasOfficer
-        local isGuildMaster = BR:IsGuildMaster()
-        local isOfficer = BR:IsGuildOfficer()
         if wasGuildMaster ~= isGuildMaster or wasOfficer ~= isOfficer then
             self.frame:Hide()
             self.frame = nil
@@ -388,8 +475,8 @@ function Config:Show()
     
     if not self.frame then
         self:CreateFrame()
-        self.wasGuildMaster = BR:IsGuildMaster()
-        self.wasOfficer = BR:IsGuildOfficer()
+        self.wasGuildMaster = isGuildMaster
+        self.wasOfficer = isOfficer
     end
     
     self:RefreshCheckboxes()
@@ -440,9 +527,28 @@ local function CreateInterfaceOptionsPanel()
     -- Character & Guild info (like in the main config panel)
     local charInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     charInfo:SetPoint("TOP", version, "BOTTOM", 0, -5)
-    local playerName = UnitName("player")
-    local guildName = BR:GetGuildName() or "Keine Gilde"
-    charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. guildName .. "|r")
+    
+    -- Funktion zum Aktualisieren des Gildennamens
+    local function UpdateCharInfo()
+        local playerName = UnitName("player")
+        local guildName = BR:GetGuildName()
+        if not guildName and BR:IsInGuild() then
+            guildName = "Lade..."
+        end
+        charInfo:SetText("|cffffffff" .. playerName .. "|r - |cffff6600" .. (guildName or "Keine Gilde") .. "|r")
+    end
+    UpdateCharInfo()
+    
+    -- OnShow aktualisiert den Gildennamen (falls beim Login noch nicht verfügbar)
+    panel:HookScript("OnShow", UpdateCharInfo)
+    
+    -- Registriere für GUILD_ROSTER_UPDATE um Gildennamen zu aktualisieren
+    panel:RegisterEvent("GUILD_ROSTER_UPDATE")
+    panel:HookScript("OnEvent", function(self, event)
+        if event == "GUILD_ROSTER_UPDATE" then
+            UpdateCharInfo()
+        end
+    end)
     
     -- Separator after banner
     local sepBanner = scrollChild:CreateTexture(nil, "ARTWORK")
@@ -464,7 +570,8 @@ local function CreateInterfaceOptionsPanel()
     sep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
     
     -- Status section
-    local isGuildMaster = BR:IsGuildMaster()
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    local isGuildMaster = BR:IsGuildDataReady() and BR:IsGuildMaster() or false
     
     local statusTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     statusTitle:SetPoint("TOPLEFT", sep, "LEFT", 16, -15)
@@ -524,6 +631,7 @@ local function CreateInterfaceOptionsPanel()
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
+        {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }
     
     for _, setting in ipairs(settings) do
@@ -602,10 +710,82 @@ local function CreateInterfaceOptionsPanel()
     local welcomeCheck = CreateOptionCheckbox(scrollChild, muteCheck, "Willkommensbildschirm beim Login", "ShowWelcomeOnLogin")
     local debugCheck = CreateOptionCheckbox(scrollChild, welcomeCheck, "Debug-Modus", "DebugMode")
     
+    -- Separator for GuildMap
+    local sepGuildMap = scrollChild:CreateTexture(nil, "ARTWORK")
+    sepGuildMap:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", -10, -15)
+    sepGuildMap:SetSize(500, 1)
+    sepGuildMap:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+    
+    -- GuildMap title
+    local guildMapTitle = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    guildMapTitle:SetPoint("TOPLEFT", sepGuildMap, "BOTTOMLEFT", 10, -10)
+    guildMapTitle:SetText("|cffffffffGildenkarte:|r")
+    
+    -- GuildMap Checkboxes
+    local guildMapEnabledCheck = CreateOptionCheckbox(scrollChild, guildMapTitle, "Gildenkarte aktivieren", "GuildMapEnabled", -5)
+    guildMapEnabledCheck:SetScript("OnClick", function(self)
+        BR:SetSetting("GuildMapEnabled", self:GetChecked(), true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    local guildMapNamesCheck = CreateOptionCheckbox(scrollChild, guildMapEnabledCheck, "Spielernamen anzeigen", "GuildMapShowNames")
+    guildMapNamesCheck:SetScript("OnClick", function(self)
+        BR:SetSetting("GuildMapShowNames", self:GetChecked(), true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    -- GuildMap Pin-Größe Slider
+    local pinSizeRow = CreateFrame("Frame", nil, scrollChild)
+    pinSizeRow:SetSize(400, 50)
+    pinSizeRow:SetPoint("TOPLEFT", guildMapNamesCheck, "BOTTOMLEFT", 0, -15)
+    
+    local pinSizeLabel = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    pinSizeLabel:SetPoint("TOPLEFT", 0, 0)
+    pinSizeLabel:SetText("Gildenkarten Pin-Größe:")
+    
+    local pinSizeValue = pinSizeRow:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    pinSizeValue:SetPoint("LEFT", pinSizeLabel, "RIGHT", 5, 0)
+    
+    local pinSizeSlider = CreateFrame("Slider", "AllforOnePinSizeSliderOptions", pinSizeRow, "OptionsSliderTemplate")
+    pinSizeSlider:SetPoint("TOPLEFT", pinSizeLabel, "BOTTOMLEFT", 0, -8)
+    pinSizeSlider:SetSize(200, 16)
+    pinSizeSlider:SetMinMaxValues(10, 64)
+    pinSizeSlider:SetValueStep(2)
+    pinSizeSlider:SetObeyStepOnDrag(true)
+    pinSizeSlider.Low:SetText("10")
+    pinSizeSlider.High:SetText("64")
+    pinSizeSlider.Text:SetText("")
+    
+    local currentPinSize = BR:GetSetting("GuildMapPinSize") or 32
+    pinSizeSlider:SetValue(currentPinSize)
+    pinSizeValue:SetText(currentPinSize)
+    
+    pinSizeSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value)
+        pinSizeValue:SetText(value)
+        BR:SetSetting("GuildMapPinSize", value, true)
+        if BR.Modules.GuildMap then
+            BR.Modules.GuildMap:RefreshAllPins()
+        end
+    end)
+    
+    statusLabels["GuildMapPinSize"] = {
+        UpdateDisplay = function()
+            local size = BR:GetSetting("GuildMapPinSize") or 32
+            pinSizeSlider:SetValue(size)
+            pinSizeValue:SetText(size)
+        end
+    }
+    
     -- Send Settings Button (only for Guild Master)
+    local lastElement = pinSizeRow
     if isGuildMaster then
         local sep3 = scrollChild:CreateTexture(nil, "ARTWORK")
-        sep3:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", -10, -15)
+        sep3:SetPoint("TOPLEFT", pinSizeRow, "BOTTOMLEFT", -10, -10)
         sep3:SetSize(500, 1)
         sep3:SetColorTexture(0.796, 0.71, 0.482, 0.5)
         
@@ -620,7 +800,41 @@ local function CreateInterfaceOptionsPanel()
         local sendInfo = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
         sendInfo:SetPoint("LEFT", sendBtn, "RIGHT", 10, 0)
         sendInfo:SetText("|cff888888Sendet aktuelle Einstellungen an alle Online-Mitglieder|r")
+        
+        lastElement = sendBtn
     end
+    
+    -- Reset Button (ganz unten)
+    local sepReset = scrollChild:CreateTexture(nil, "ARTWORK")
+    sepReset:SetPoint("TOPLEFT", lastElement, "BOTTOMLEFT", -10, -20)
+    sepReset:SetSize(500, 1)
+    sepReset:SetColorTexture(0.5, 0.5, 0.5, 0.3)
+    
+    local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+    resetBtn:SetSize(200, 24)
+    resetBtn:SetPoint("TOPLEFT", sepReset, "BOTTOMLEFT", 10, -15)
+    resetBtn:SetText("Einstellungen zurücksetzen")
+    resetBtn:SetScript("OnClick", function(self)
+        StaticPopupDialogs["ALLFORONE_RESET_CONFIRM"] = {
+            text = "Möchtest du wirklich alle Einstellungen zurücksetzen?\n\nDeine Spielzeit-Daten bleiben erhalten.\nDas Addon wird versuchen, die Einstellungen vom Gildenmeister/Offizier zu synchronisieren.",
+            button1 = "Ja, zurücksetzen",
+            button2 = "Abbrechen",
+            OnAccept = function()
+                BR:ResetSettings(function(success)
+                    if BR.optionsPanel and BR.optionsPanel:IsShown() then
+                        BR.optionsPanel:Hide()
+                        BR.optionsPanel:Show()
+                    end
+                end)
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("ALLFORONE_RESET_CONFIRM")
+    end)
+    
     
     -- Refresh function
     local function RefreshPanel()

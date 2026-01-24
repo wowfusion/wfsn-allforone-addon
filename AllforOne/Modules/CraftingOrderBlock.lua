@@ -107,7 +107,6 @@ function CraftingOrderBlock:HookAPI()
         end
         self.apiHooked = true
         BR:Debug("C_CraftingOrders.PlaceNewOrder hooked successfully")
-        BR:Print("Handwerksaufträge-Block aktiv", "info")
     else
         BR:Debug("C_CraftingOrders.PlaceNewOrder not found")
     end

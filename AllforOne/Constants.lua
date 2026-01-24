@@ -6,9 +6,9 @@
 local addonName, BR = ...
 
 ----------------------------------------------------------------------
---  Version
+--  Version (dynamisch aus TOC laden)
 ----------------------------------------------------------------------
-BR.Version = BR.Version or "1.0.2"
+BR.Version = C_AddOns.GetAddOnMetadata("AllforOne", "Version") or "1.0.0"
 
 ----------------------------------------------------------------------
 --  Colors

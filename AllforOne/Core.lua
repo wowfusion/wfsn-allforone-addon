@@ -14,6 +14,7 @@ _G.AllforOneCharDB = _G.AllforOneCharDB or {}
 -- Local references (Colors, Backdrops, etc. are defined in Constants.lua)
 BR.Modules = {}
 BR.Events = CreateFrame("Frame")
+BR.GuildDataReady = false -- Flag ob Guild-Daten geladen sind
 
 ----------------------------------------------------------------------
 --  Utility Functions
@@ -155,6 +156,130 @@ function BR:Debug(msg)
 end
 
 ----------------------------------------------------------------------
+--  SavedVariables Obfuscation (XOR + Base64)
+----------------------------------------------------------------------
+
+local OBFUSCATION_KEY = "AllforOneGuildSecure2024"
+
+local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+local function base64encode(data)
+    return ((data:gsub('.', function(x) 
+        local r,b='',x:byte()
+        for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+        if (#x < 6) then return '' end
+        local c=0
+        for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+        return b64chars:sub(c+1,c+1)
+    end)..({ '', '==', '=' })[#data%3+1])
+end
+
+local function base64decode(data)
+    data = string.gsub(data, '[^'..b64chars..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b64chars:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+local function xorEncrypt(str, key)
+    local result = {}
+    local keyLen = #key
+    for i = 1, #str do
+        local charCode = string.byte(str, i)
+        local keyChar = string.byte(key, ((i - 1) % keyLen) + 1)
+        result[i] = string.char(bit.bxor(charCode, keyChar))
+    end
+    return table.concat(result)
+end
+
+function BR:ObfuscateString(str)
+    if type(str) ~= "string" then return str end
+    local encrypted = xorEncrypt(str, OBFUSCATION_KEY)
+    return base64encode(encrypted)
+end
+
+function BR:DeobfuscateString(str)
+    if type(str) ~= "string" then return str end
+    local decoded = base64decode(str)
+    return xorEncrypt(decoded, OBFUSCATION_KEY)
+end
+
+function BR:ObfuscateTable(tbl)
+    if type(tbl) ~= "table" then return tbl end
+    local result = {}
+    for k, v in pairs(tbl) do
+        if type(v) == "string" then
+            result[k] = self:ObfuscateString(v)
+        elseif type(v) == "table" then
+            result[k] = self:ObfuscateTable(v)
+        else
+            result[k] = v
+        end
+    end
+    return result
+end
+
+function BR:DeobfuscateTable(tbl)
+    if type(tbl) ~= "table" then return tbl end
+    local result = {}
+    for k, v in pairs(tbl) do
+        if type(v) == "string" then
+            result[k] = self:DeobfuscateString(v)
+        elseif type(v) == "table" then
+            result[k] = self:DeobfuscateTable(v)
+        else
+            result[k] = v
+        end
+    end
+    return result
+end
+
+function BR:ObfuscateSavedVariables()
+    if AllforOneDB.AddonUsers then
+        local obfuscated = {}
+        for name, data in pairs(AllforOneDB.AddonUsers) do
+            local obfName = self:ObfuscateString(name)
+            if type(data) == "table" then
+                obfuscated[obfName] = self:ObfuscateTable(data)
+            else
+                obfuscated[obfName] = data
+            end
+        end
+        AllforOneDB.AddonUsers = obfuscated
+        AllforOneDB._obfuscated = true
+    end
+end
+
+function BR:DeobfuscateSavedVariables()
+    if not AllforOneDB._obfuscated then return end
+    
+    if AllforOneDB.AddonUsers then
+        local deobfuscated = {}
+        for name, data in pairs(AllforOneDB.AddonUsers) do
+            local realName = self:DeobfuscateString(name)
+            if type(data) == "table" then
+                deobfuscated[realName] = self:DeobfuscateTable(data)
+            else
+                deobfuscated[realName] = data
+            end
+        end
+        AllforOneDB.AddonUsers = deobfuscated
+    end
+    
+    AllforOneDB._obfuscated = nil
+end
+
+----------------------------------------------------------------------
 --  Settings Management
 ----------------------------------------------------------------------
 
@@ -173,6 +298,55 @@ function BR:SetSetting(key, value, perCharacter)
     end
 end
 
+-- Setzt alle Einstellungen zurück und synchronisiert mit Gildenmeister/Offizier
+-- WICHTIG: SecurityData (playedTime etc.) wird NICHT gelöscht!
+function BR:ResetSettings(callback)
+    self:Print("Einstellungen werden zurückgesetzt...", "info")
+    
+    -- SecurityData sichern BEVOR wir löschen
+    local securityData = AllforOneCharDB.SecurityData
+    local securityDataObf = AllforOneCharDB._sd
+    
+    -- Lösche alle Character-spezifischen Einstellungen
+    wipe(AllforOneCharDB)
+    
+    -- SecurityData wiederherstellen
+    if securityData then
+        AllforOneCharDB.SecurityData = securityData
+    elseif securityDataObf then
+        AllforOneCharDB._sd = securityDataObf
+    end
+    
+    -- Initialisiere Standardwerte
+    self:InitializeDefaults()
+    
+    -- Versuche Settings von Gildenmeister/Offizier zu synchronisieren
+    if self:IsInGuild() and not self:IsGuildMaster() then
+        -- Flag setzen dass wir auf Sync warten
+        self.waitingForSettingsSync = true
+        self.settingsSyncCallback = callback
+        
+        -- Request Settings von der Gilde
+        self:RequestGuildSettings()
+        
+        -- Timeout nach 5 Sekunden - falls niemand antwortet, Standardwerte behalten
+        C_Timer.After(5, function()
+            if self.waitingForSettingsSync then
+                self.waitingForSettingsSync = false
+                self.settingsSyncCallback = nil
+                self:Print("Keine Antwort von Gildenleitung - Standardwerte werden verwendet.", "warning")
+                self:RefreshModules()
+                if callback then callback(false) end
+            end
+        end)
+    else
+        -- Gildenmeister oder keine Gilde - sofort fertig
+        self:RefreshModules()
+        self:Print("Einstellungen wurden auf Standardwerte zurückgesetzt.", "info")
+        if callback then callback(true) end
+    end
+end
+
 function BR:InitializeDefaults()
     local defaults = {
         Enabled = true,
@@ -183,10 +357,14 @@ function BR:InitializeDefaults()
         BlockMail = true,
         BlockCraftingOrders = true,
         BlockWarbound = true,
+        BlockDragonFlying = true, -- Himmelsreiten bis Level 80 blockieren
         MailBlockMode = "selective", -- "full" or "selective"
         DebugMode = false,
         MuteNotificationSounds = false,
         ShowWelcomeOnLogin = true,
+        GuildMapEnabled = true, -- Gildenkarte aktiviert
+        GuildMapShowNames = true, -- Spielernamen anzeigen
+        GuildMapPinSize = 10, -- Größe der Gildenkarten-Pins (10-64)
     }
     
     for key, value in pairs(defaults) do
@@ -215,30 +393,107 @@ function BR:GetGuildName()
     return guildName
 end
 
-function BR:IsGuildMember(playerName)
-    if not self:IsInGuild() then return false end
+-- Fordert Guild-Roster Update an (neue API)
+function BR:RequestGuildRoster()
+    if not self:IsInGuild() then return end
+    -- Neue API: C_GuildInfo.GuildRoster() ersetzt GuildRoster()
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    elseif GuildRoster then
+        GuildRoster()
+    end
+end
+
+-- Prüft ob Guild-Daten bereit sind
+function BR:IsGuildDataReady()
+    if not self:IsInGuild() then return true end -- Keine Gilde = immer "bereit"
+    return self.GuildDataReady
+end
+
+function BR:IsGuildMember(playerNameOrUnit)
+    if not self:IsInGuild() then 
+        self:Debug("IsGuildMember: Spieler ist nicht in einer Gilde")
+        return false 
+    end
     
-    -- Remove realm name if present
-    local name = playerName
+    local inputName = playerNameOrUnit
+    if not inputName or inputName == "" then
+        self:Debug("IsGuildMember: Kein gültiger Spielername")
+        return false
+    end
+    
+    -- Methode 1: Prüfe ob es eine Unit-ID ist (z.B. "target", "party1", etc.)
+    -- UnitIsInMyGuild funktioniert am besten mit Unit-IDs
+    if UnitExists(inputName) then
+        local isInGuild = UnitIsInMyGuild(inputName)
+        self:Debug("IsGuildMember: UnitIsInMyGuild(" .. inputName .. ") = " .. tostring(isInGuild))
+        if isInGuild then
+            return true
+        end
+    end
+    
+    -- Remove realm name if present for name comparison
+    local name = inputName
     if name then
         name = strsplit("-", name)
     end
     
-    local numMembers = GetNumGuildMembers()
-    for i = 1, numMembers do
+    -- Methode 2: Versuche UnitIsInMyGuild mit dem Namen
+    -- Dies funktioniert wenn der Spieler in Reichweite ist
+    if UnitIsInMyGuild then
+        -- Versuche verschiedene Unit-IDs
+        local unitsToCheck = {"target", "focus", "mouseover"}
+        for i = 1, 4 do
+            table.insert(unitsToCheck, "party" .. i)
+            table.insert(unitsToCheck, "raid" .. i)
+        end
+        
+        for _, unit in ipairs(unitsToCheck) do
+            if UnitExists(unit) then
+                local unitName = UnitName(unit)
+                if unitName and unitName:lower() == name:lower() then
+                    local isInGuild = UnitIsInMyGuild(unit)
+                    self:Debug("IsGuildMember: " .. name .. " gefunden als " .. unit .. ", UnitIsInMyGuild = " .. tostring(isInGuild))
+                    if isInGuild then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Methode 3: Gildenliste durchsuchen (inkl. Offline-Mitglieder)
+    -- Stelle sicher dass die Gildenliste geladen ist
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    end
+    
+    -- Hole ALLE Gildenmitglieder (inkl. Offline)
+    local numTotal, numOnline = GetNumGuildMembers()
+    self:Debug("IsGuildMember: Prüfe " .. name .. " gegen " .. numTotal .. " Gildenmitglieder (" .. numOnline .. " online)")
+    
+    for i = 1, numTotal do
         local guildMemberName = GetGuildRosterInfo(i)
         if guildMemberName then
             local guildMemberShort = strsplit("-", guildMemberName)
-            if guildMemberShort and name and guildMemberShort:lower() == name:lower() then
+            if guildMemberShort and guildMemberShort:lower() == name:lower() then
+                self:Debug("IsGuildMember: " .. name .. " ist Gildenmitglied (gefunden als " .. guildMemberName .. ")")
                 return true
             end
         end
     end
+    
+    self:Debug("IsGuildMember: " .. name .. " ist KEIN Gildenmitglied (nicht in " .. numTotal .. " Mitgliedern gefunden)")
     return false
 end
 
 function BR:IsGuildOfficer()
     if not self:IsInGuild() then return false end
+    -- Warte auf Guild-Daten
+    if not self.GuildDataReady then
+        self:Debug("IsGuildOfficer: Guild-Daten noch nicht bereit")
+        return false
+    end
     local _, _, rankIndex = GetGuildInfo("player")
     -- Rank 0 = Guild Master, Rank 1 = typically first officer rank
     -- We consider ranks 0 and 1 as officers, but this may vary per guild
@@ -247,6 +502,11 @@ end
 
 function BR:IsGuildMaster()
     if not self:IsInGuild() then return false end
+    -- Warte auf Guild-Daten
+    if not self.GuildDataReady then
+        self:Debug("IsGuildMaster: Guild-Daten noch nicht bereit")
+        return false
+    end
     local _, _, rankIndex = GetGuildInfo("player")
     return rankIndex == 0
 end
@@ -356,27 +616,38 @@ end
 function BR:PingGuildMembers()
     if not self:IsInGuild() then return end
     
-    -- Store timestamp of when we pinged
-    AllforOneDB.LastPingTime = time()
-    AllforOneDB.PendingPingResponses = {}
+    -- Store timestamp of when we pinged (per-character to avoid conflicts)
+    AllforOneCharDB.LastPingTime = time()
+    AllforOneCharDB.PendingPingResponses = {}
     
-    -- Get list of online guild members
+    -- Get list of online guild members (excluding self)
     local numMembers = GetNumGuildMembers()
     local onlineCount = 0
+    local myName = UnitName("player"):lower()
     
     for i = 1, numMembers do
         local fullName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
         if fullName and isOnline then
             local shortName = strsplit("-", fullName)
-            AllforOneDB.PendingPingResponses[shortName:lower()] = true
-            onlineCount = onlineCount + 1
+            local shortNameLower = shortName:lower()
+            -- Eigenen Spieler ausschließen
+            if shortNameLower ~= myName then
+                AllforOneCharDB.PendingPingResponses[shortNameLower] = true
+                onlineCount = onlineCount + 1
+            end
         end
     end
     
     -- Send the ping
     self:SendAddonMessage("PING", "GUILD")
-    self:Debug("Pinged guild - " .. onlineCount .. " online members")
-    self:Print("Status-Anfrage an " .. onlineCount .. " Online-Mitglieder gesendet...", "info")
+    self:Debug("Pinged guild - " .. onlineCount .. " online members (excluding self)")
+    -- Nur Offiziere und GM sehen die Status-Nachricht
+    if self:IsGuildOfficer() then
+        self:Print("Status-Anfrage an " .. onlineCount .. " Online-Mitglieder gesendet...", "info")
+    end
+    
+    -- Eigene Antwort sofort registrieren (wir empfangen unsere eigenen Nachrichten nicht)
+    self:BroadcastStatus()
     
     -- After 10 seconds, check who didn't respond
     C_Timer.After(10, function()
@@ -388,23 +659,25 @@ end
 
 -- Check who responded to the ping
 function BR:CheckPingResponses()
-    if not AllforOneDB.PendingPingResponses then return end
-    if not AllforOneDB.LastPingTime then return end
+    if not AllforOneCharDB.PendingPingResponses then return end
+    if not AllforOneCharDB.LastPingTime then return end
     
-    local pingTime = AllforOneDB.LastPingTime
+    local pingTime = AllforOneCharDB.LastPingTime
     local noResponseCount = 0
     local responseCount = 0
     local totalOnline = 0
     
     -- Check each pending response
-    for name, pending in pairs(AllforOneDB.PendingPingResponses) do
+    for name, pending in pairs(AllforOneCharDB.PendingPingResponses) do
         totalOnline = totalOnline + 1
         local info = AllforOneDB.AddonUsers and AllforOneDB.AddonUsers[name]
         
+        -- Prüfe ob eine Antwort nach dem Ping kam (oder zur gleichen Zeit)
+        -- lastSeen ist ein time() Wert, pingTime auch
         if info and info.lastSeen and info.lastSeen >= pingTime then
             -- Got a response after the ping
             responseCount = responseCount + 1
-            self:Debug("Response received from: " .. name)
+            self:Debug("Response received from: " .. name .. " (lastSeen: " .. info.lastSeen .. ", pingTime: " .. pingTime .. ")")
         else
             -- No response - mark as no addon
             noResponseCount = noResponseCount + 1
@@ -413,15 +686,19 @@ function BR:CheckPingResponses()
             end
             -- Mark as no addon (nil status means no addon)
             AllforOneDB.AddonUsers[name] = nil
-            self:Debug("No response from online player: " .. name .. " (no addon)")
+            local lastSeenStr = info and info.lastSeen and tostring(info.lastSeen) or "nil"
+            self:Debug("No response from online player: " .. name .. " (lastSeen: " .. lastSeenStr .. ", pingTime: " .. pingTime .. ")")
         end
     end
     
     -- Clear pending list
-    AllforOneDB.PendingPingResponses = nil
+    AllforOneCharDB.PendingPingResponses = nil
     
-    -- Show summary
-    self:Print("Status-Sync abgeschlossen: " .. responseCount .. "/" .. totalOnline .. " haben geantwortet.", "info")
+    -- Show summary - nur für Offiziere und GM
+    -- Zeige auch den eigenen Spieler in der Gesamtzahl (+1)
+    if self:IsGuildOfficer() then
+        self:Print("Status-Sync abgeschlossen: " .. (responseCount + 1) .. "/" .. (totalOnline + 1) .. " haben geantwortet.", "info")
+    end
     if noResponseCount > 0 then
         self:Debug(noResponseCount .. " online players have no addon installed")
     end
@@ -536,6 +813,11 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
                 BR.Modules.SecurityCheck:ResetWarning(sender)
             end
         end
+    elseif msgType == "GUILDMAP" then
+        -- GuildMap position update
+        if BR.Modules.GuildMap and BR.Modules.GuildMap.HandlePositionMessage then
+            BR.Modules.GuildMap:HandlePositionMessage(message, sender)
+        end
     end
 end
 
@@ -577,7 +859,7 @@ function BR:HandleGuildSettings(message, sender)
     local isFromGuildMaster = parts[1] == "GUILD_SETTINGS"
     local isFromOfficer = parts[1] == "OFFICER_SETTINGS"
     
-    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):hash
+    -- Parse settings: GUILD_SETTINGS:BlockTrade:BlockGroup:BlockLFG:BlockAuction:BlockMail:BlockWarbound:BlockCrafting:MailBlockMode(binary):BlockDragonFlying:hash
     local settings = {
         BlockTrade = parts[2] == "1",
         BlockGroupInvites = parts[3] == "1",
@@ -587,8 +869,9 @@ function BR:HandleGuildSettings(message, sender)
         BlockWarbound = parts[7] == "1",
         BlockCraftingOrders = parts[8] == "1",
         MailBlockMode = parts[9] == "1" and "full" or "selective",
+        BlockDragonFlying = parts[10] == "1",
     }
-    local receivedHash = parts[10] or ""
+    local receivedHash = parts[11] or ""
     
     -- Priority logic:
     -- 1. Guild Master settings ALWAYS override everything
@@ -625,7 +908,8 @@ function BR:HandleGuildSettings(message, sender)
         if not self:IsGuildMaster() then
             local guildSyncedSettings = {
                 "BlockTrade", "BlockGroupInvites", "BlockLFG", "BlockAuction",
-                "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode"
+                "BlockMail", "BlockWarbound", "BlockCraftingOrders", "MailBlockMode",
+                "BlockDragonFlying"
             }
             for _, key in ipairs(guildSyncedSettings) do
                 if settings[key] ~= nil then
@@ -650,6 +934,7 @@ function BR:CalculateSettingsHash()
         self:GetSetting("BlockWarbound") and "1" or "0",
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
+        self:GetSetting("BlockDragonFlying") and "1" or "0",
     }
     return table.concat(hashParts, "")
 end
@@ -685,6 +970,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         self:GetSetting("BlockWarbound") and "1" or "0",
         self:GetSetting("BlockCraftingOrders") and "1" or "0",
         mailMode == "full" and "1" or "0",
+        self:GetSetting("BlockDragonFlying") and "1" or "0",
         currentHash
     }
     
@@ -701,6 +987,7 @@ function BR:BroadcastGuildSettings(forceNewHash)
         BlockWarbound = self:GetSetting("BlockWarbound"),
         BlockCraftingOrders = self:GetSetting("BlockCraftingOrders"),
         MailBlockMode = self:GetSetting("MailBlockMode"),
+        BlockDragonFlying = self:GetSetting("BlockDragonFlying"),
     }
     AllforOneDB.GuildSettingsFromGM = true
     
@@ -736,6 +1023,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             storedSettings.BlockWarbound and "1" or "0",
             storedSettings.BlockCraftingOrders and "1" or "0",
             mailMode == "full" and "1" or "0",
+            (storedSettings.BlockDragonFlying ~= false) and "1" or "0",
             storedHash
         }
     else
@@ -751,6 +1039,7 @@ function BR:BroadcastGuildSettingsAsOfficer()
             self:GetSetting("BlockWarbound") and "1" or "0",
             self:GetSetting("BlockCraftingOrders") and "1" or "0",
             mailMode == "full" and "1" or "0",
+            self:GetSetting("BlockDragonFlying") and "1" or "0",
             currentHash
         }
     end
@@ -825,55 +1114,99 @@ end
 BR.Events:RegisterEvent("ADDON_LOADED")
 BR.Events:RegisterEvent("PLAYER_LOGIN")
 BR.Events:RegisterEvent("PLAYER_ENTERING_WORLD")
+BR.Events:RegisterEvent("PLAYER_LOGOUT")
 BR.Events:RegisterEvent("CHAT_MSG_ADDON")
 BR.Events:RegisterEvent("GUILD_ROSTER_UPDATE")
+BR.Events:RegisterEvent("PLAYER_GUILD_UPDATE") -- Wird gefeuert wenn Gildenstatus sich ändert
 
 BR.Events:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         local loadedAddon = ...
         if loadedAddon == addonName then
             BR:InitializeDefaults()
+            BR:DeobfuscateSavedVariables()
             BR:InitializeComm()
             BR:Debug("Addon loaded")
+        end
+    elseif event == "PLAYER_LOGOUT" then
+        BR:ObfuscateSavedVariables()
+        -- Verschleiere geschützte Settings
+        if BR.SettingsProtection then
+            BR.SettingsProtection:ObfuscateSettings()
         end
     elseif event == "PLAYER_LOGIN" then
         BR:EnableModules()
         
         -- Reset hash response tracking
         BR.receivedGMHash = false
+        BR.GuildDataReady = false -- Reset beim Login
+        BR.guildInitDone = false -- Flag um doppelte Initialisierung zu verhindern
         
-        C_Timer.After(3, function()
-            -- Request hash first (more efficient than full settings)
-            -- If hash differs, full settings will be requested automatically
-            BR:RequestGuildHash()
-        end)
-        C_Timer.After(5, function()
-            BR:BroadcastStatus()
-            -- If guild master, also broadcast current settings with hash
-            if BR:IsGuildMaster() then
-                BR:BroadcastGuildSettings(true) -- Force hash update on login
-            end
-        end)
-        -- Ping all guild members after 15 seconds (give time for everything to load)
-        C_Timer.After(15, function()
-            BR:PingGuildMembers()
-        end)
+        -- Fordere Guild-Roster an (neue API)
+        if BR:IsInGuild() then
+            BR:RequestGuildRoster()
+        else
+            BR.GuildDataReady = true -- Keine Gilde = sofort bereit
+        end
+        
+        -- Warte auf Guild-Daten bevor wir Guild-spezifische Aktionen ausführen
+        -- Die eigentliche Initialisierung passiert in GUILD_ROSTER_UPDATE
+        
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
-        
-        if BR:GetSetting("Enabled") then
-            BR:Print("Addon aktiviert für diesen Charakter", "info")
-        else
-            BR:Print("Addon ist deaktiviert. Nutze /br enable zum Aktivieren.", "warning")
-        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
         BR:HandleAddonMessage(...)
     elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Guild-Daten sind jetzt verfügbar
+        local wasReady = BR.GuildDataReady
+        BR.GuildDataReady = true
+        
         -- Refresh guild member cache
         if BR.Modules.GuildCheck and BR.Modules.GuildCheck.RefreshCache then
             BR.Modules.GuildCheck:RefreshCache()
+        end
+        
+        -- Einmalige Initialisierung nach dem ersten GUILD_ROSTER_UPDATE
+        if not BR.guildInitDone and BR:IsInGuild() then
+            BR.guildInitDone = true
+            BR:Debug("Guild-Daten geladen - starte Guild-Initialisierung")
+            
+            -- Jetzt können wir Guild-spezifische Aktionen ausführen
+            C_Timer.After(1, function()
+                -- Request hash first (more efficient than full settings)
+                BR:RequestGuildHash()
+            end)
+            C_Timer.After(3, function()
+                BR:BroadcastStatus()
+                -- If guild master, also broadcast current settings with hash
+                if BR:IsGuildMaster() then
+                    BR:BroadcastGuildSettings(true) -- Force hash update on login
+                end
+            end)
+            -- Ping all guild members after 10 seconds
+            C_Timer.After(10, function()
+                BR:PingGuildMembers()
+            end)
+            
+            -- Refresh Config Panel falls offen
+            if BR.Modules.Config and BR.Modules.Config.frame and BR.Modules.Config.frame:IsShown() then
+                BR.Modules.Config.frame:Hide()
+                BR.Modules.Config.frame = nil
+                BR.Modules.Config.checkboxes = {}
+                BR.Modules.Config.infoLabels = {}
+                BR.Modules.Config:Show()
+            end
+        end
+    elseif event == "PLAYER_GUILD_UPDATE" then
+        -- Spieler ist einer Gilde beigetreten oder hat sie verlassen
+        BR.GuildDataReady = false
+        BR.guildInitDone = false
+        if BR:IsInGuild() then
+            BR:RequestGuildRoster()
+        else
+            BR.GuildDataReady = true
         end
     end
 end)
@@ -915,16 +1248,28 @@ SlashCmdList["ALLFORONE"] = function(msg)
         -- Send reset message to the target player
         BR:SendAddonMessage("RESET_WARNING:" .. arg, "GUILD")
         BR:Print("Reset-Befehl für " .. arg .. " gesendet.", "info")
-    else
-        BR:Print("Befehle:")
+    elseif cmd == "hilfe" or cmd == "help" then
+        BR:Print("|cFFFFCC00=== All for One Befehle ===|r")
+        BR:Print("|cFF00FF00Addon:|r")
         BR:Print("  /afo - Einstellungen öffnen")
         BR:Print("  /afo status - Status anzeigen")
+        BR:Print("  /afo debug - Debug-Modus umschalten")
         if BR:IsGuildOfficer() then
+            BR:Print("|cFF00FF00Offizier:|r")
             BR:Print("  /afo admin - Offizier-Übersicht öffnen")
             BR:Print("  /afo ping - Gildenmitglieder pingen")
             BR:Print("  /afo reset <Name> - Warnung zurücksetzen")
         end
+        BR:Print("|cFF00FF00QoL Shortcuts:|r")
+        BR:Print("  /rl - UI neu laden")
+        BR:Print("  /rc - Ready Check")
+        BR:Print("  /inv <Name> - Spieler einladen")
+        BR:Print("  /pt [Sek] - Pull Timer (Standard: 10)")
+        BR:Print("  /pt stop - Pull Timer abbrechen")
+    else
+        BR:Print("Unbekannter Befehl. /afo hilfe für alle Befehle.")
     end
 end
 
 BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
+BR:Print("Für die Gilde, für den Zusammenhalt – bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")

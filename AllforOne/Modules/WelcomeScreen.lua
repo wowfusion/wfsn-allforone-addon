@@ -47,6 +47,9 @@ local function GetWelcomeMessage()
     if BR:GetSetting("BlockWarbound") then
         table.insert(activeBlocks, "- Warbound-Bank blockiert")
     end
+    if BR:GetSetting("BlockDragonFlying") then
+        table.insert(activeBlocks, "- Himmelsreiten bis Max-Level blockiert")
+    end
     
     if #activeBlocks > 0 then
         for _, block in ipairs(activeBlocks) do
@@ -56,7 +59,6 @@ local function GetWelcomeMessage()
         table.insert(lines, "- Keine Blockierungen aktiv")
     end
     
-    table.insert(lines, "")
     table.insert(lines, "Viel Spaß beim Spielen!|r")
     
     return table.concat(lines, "\n")

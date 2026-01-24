@@ -8,6 +8,7 @@ local addonName, BR = ...
 local GroupBlock = {
     enabled = false,
     hooksInstalled = false,
+    loginCooldown = true, -- Verhindert Gruppenprüfung direkt nach Login
 }
 
 function GroupBlock:OnInitialize()
@@ -184,8 +185,31 @@ function GroupBlock:HookGroupEvents()
     eventFrame:RegisterEvent("PARTY_INVITE_REQUEST")
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("GROUP_JOINED")
+    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
     
     eventFrame:SetScript("OnEvent", function(_, event, ...)
+        if event == "PLAYER_ENTERING_WORLD" then
+            -- Login-Cooldown aktivieren - verhindert sofortiges Kicken nach Login
+            GroupBlock.loginCooldown = true
+            BR:Debug("GroupBlock: Login detected, cooldown active")
+            -- Cooldown nach 5 Sekunden aufheben (Zeit für Gildendaten-Laden)
+            C_Timer.After(5, function()
+                GroupBlock.loginCooldown = false
+                BR:Debug("GroupBlock: Login cooldown ended")
+            end)
+            return
+        end
+        
+        if event == "GUILD_ROSTER_UPDATE" then
+            -- Gildendaten wurden geladen - Cache aktualisieren
+            if BR.Modules.GuildCheck then
+                BR.Modules.GuildCheck.lastUpdate = 0 -- Force refresh
+                BR.Modules.GuildCheck:RefreshCache()
+            end
+            return
+        end
+        
         if not GroupBlock:ShouldBlock() then return end
         
         if event == "PARTY_INVITE_REQUEST" then
@@ -198,10 +222,35 @@ function GroupBlock:HookGroupEvents()
     self.eventFrame = eventFrame
 end
 
--- Check all group members and leave if non-guild member is present
+-- Check all group members and leave if non-guild member PLAYER is present
+-- NPCs are allowed in the group (e.g. quest NPCs, followers)
 function GroupBlock:CheckGroupMembers()
     if not IsInGroup() then return end
     if IsInRaid() then return end -- Don't check raids
+    
+    -- Nicht prüfen während Login-Cooldown (Gildendaten noch nicht geladen)
+    if self.loginCooldown then
+        BR:Debug("GroupBlock: Skipping check during login cooldown")
+        return
+    end
+    
+    -- Nicht prüfen wenn nicht in Gilde oder Gildendaten nicht verfügbar
+    if not BR:IsInGuild() then
+        BR:Debug("GroupBlock: Skipping check - not in guild or guild data not loaded")
+        return
+    end
+    
+    -- Prüfen ob GuildCheck-Cache gefüllt ist
+    if BR.Modules.GuildCheck then
+        local cacheSize = 0
+        for _ in pairs(BR.Modules.GuildCheck.cache) do
+            cacheSize = cacheSize + 1
+        end
+        if cacheSize == 0 then
+            BR:Debug("GroupBlock: Skipping check - guild cache empty")
+            return
+        end
+    end
     
     local numMembers = GetNumGroupMembers()
     if numMembers <= 1 then return end
@@ -209,26 +258,31 @@ function GroupBlock:CheckGroupMembers()
     for i = 1, numMembers do
         local unit = "party" .. i
         if UnitExists(unit) then
-            local name = UnitName(unit)
-            if name and name ~= UnitName("player") then
-                local fullName = name
-                local realm = GetRealmName()
-                local unitRealm = select(2, UnitName(unit))
-                if unitRealm and unitRealm ~= "" then
-                    fullName = name .. "-" .. unitRealm
-                end
-                
-                if not self:IsGuildMember(name) and not self:IsGuildMember(fullName) then
-                    -- Non-guild member found - leave group
-                    C_Timer.After(0.5, function()
-                        if BR.ShowWarningPopup then
-                            BR:ShowWarningPopup("Gruppe verlassen", name .. " ist kein Gildenmitglied!\nGruppe wird automatisch verlassen.", 4)
-                        end
-                        C_Timer.After(1, function()
-                            C_PartyInfo.LeaveParty()
+            -- Skip NPCs - only check players
+            if not UnitIsPlayer(unit) then
+                BR:Debug("GroupBlock: Skipping NPC in party: " .. (UnitName(unit) or "unknown"))
+            else
+                local name = UnitName(unit)
+                if name and name ~= UnitName("player") then
+                    local fullName = name
+                    local realm = GetRealmName()
+                    local unitRealm = select(2, UnitName(unit))
+                    if unitRealm and unitRealm ~= "" then
+                        fullName = name .. "-" .. unitRealm
+                    end
+                    
+                    if not self:IsGuildMember(name) and not self:IsGuildMember(fullName) then
+                        -- Non-guild member player found - leave group
+                        C_Timer.After(0.5, function()
+                            if BR.ShowWarningPopup then
+                                BR:ShowWarningPopup("Gruppe verlassen", name .. " ist kein Gildenmitglied!\nGruppe wird automatisch verlassen.", 4)
+                            end
+                            C_Timer.After(1, function()
+                                C_PartyInfo.LeaveParty()
+                            end)
                         end)
-                    end)
-                    return
+                        return
+                    end
                 end
             end
         end

@@ -10,6 +10,12 @@
 
 ## X-Website: https://wowfusion.de
 
+# Libraries
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\HereBeDragons\HereBeDragons-2.0.lua
+Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
+
 # Constants and Core
 Constants.lua
 Core.lua
@@ -27,12 +33,16 @@ Modules\AuctionBlock.lua
 Modules\MailBlock.lua
 Modules\CraftingOrderBlock.lua
 Modules\WarboundBlock.lua
+Modules\DragonFlyingBlock.lua
 Modules\AdminPanel.lua
 Modules\WelcomeScreen.lua
 Modules\MinimapIcon.lua
 Modules\SecurityCheck.lua
+Modules\SettingsProtection.lua
 Modules\ChatFilter.lua
 Modules\TooltipEnhance.lua
+Modules\GuildMap.lua
+Modules\QualityOfLife.lua
 
 # Configuration
 Config.lua

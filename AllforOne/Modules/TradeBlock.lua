@@ -94,8 +94,20 @@ function TradeBlock:OnTradeShow()
         BR:Debug("Trade opened with: " .. tostring(tradeName))
         
         if tradeName and tradeName ~= "" then
-            local isGuildMember = BR:IsGuildMember(tradeName)
-            BR:Debug("Is guild member: " .. tostring(isGuildMember))
+            -- Methode 1: Prüfe mit UnitIsInMyGuild direkt auf "NPC" Unit
+            -- Beim Handeln ist der Handelspartner als "NPC" Unit verfügbar
+            local isGuildMember = false
+            
+            if UnitExists("npc") and UnitIsPlayer("npc") then
+                isGuildMember = UnitIsInMyGuild("npc")
+                BR:Debug("Trade: UnitIsInMyGuild('npc') = " .. tostring(isGuildMember))
+            end
+            
+            -- Methode 2: Fallback auf Namen-Prüfung
+            if not isGuildMember then
+                isGuildMember = BR:IsGuildMember(tradeName)
+                BR:Debug("Trade: IsGuildMember('" .. tradeName .. "') = " .. tostring(isGuildMember))
+            end
             
             if not isGuildMember then
                 -- Close trade immediately
@@ -115,18 +127,41 @@ end
 function TradeBlock:OnTradeRequest(playerName)
     if not playerName then return end
     
-    -- Remove realm name
-    playerName = strsplit("-", playerName)
+    -- Remove realm name for display
+    local displayName = strsplit("-", playerName)
     
-    local isGuildMember = BR:IsGuildMember(playerName)
-    BR:Debug("Trade request from: " .. playerName .. " - Guild: " .. tostring(isGuildMember))
+    -- Prüfe mit UnitIsInMyGuild auf verschiedene Units
+    local isGuildMember = false
+    
+    -- Versuche den Spieler als Unit zu finden
+    local unitsToCheck = {"target", "focus", "mouseover", "npc"}
+    for i = 1, 4 do
+        table.insert(unitsToCheck, "party" .. i)
+    end
+    
+    for _, unit in ipairs(unitsToCheck) do
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            local unitName = UnitName(unit)
+            if unitName and unitName:lower() == displayName:lower() then
+                isGuildMember = UnitIsInMyGuild(unit)
+                BR:Debug("Trade request: Found " .. displayName .. " as " .. unit .. ", UnitIsInMyGuild = " .. tostring(isGuildMember))
+                if isGuildMember then break end
+            end
+        end
+    end
+    
+    -- Fallback auf Namen-Prüfung
+    if not isGuildMember then
+        isGuildMember = BR:IsGuildMember(displayName)
+        BR:Debug("Trade request from: " .. displayName .. " - Guild (name check): " .. tostring(isGuildMember))
+    end
     
     if not isGuildMember then
         CancelTrade()
         if BR.ShowWarningPopup then
-            BR:ShowWarningPopup("Handelsanfrage abgelehnt", "Anfrage von " .. playerName .. " abgelehnt.\nKein Gildenmitglied!", 4)
+            BR:ShowWarningPopup("Handelsanfrage abgelehnt", "Anfrage von " .. displayName .. " abgelehnt.\nKein Gildenmitglied!", 4)
         else
-            BR:Notify("Handelsanfrage von " .. playerName .. " abgelehnt - kein Gildenmitglied!", "warning")
+            BR:Notify("Handelsanfrage von " .. displayName .. " abgelehnt - kein Gildenmitglied!", "warning")
         end
     end
 end
@@ -135,19 +170,29 @@ end
 local originalInitiateTrade = InitiateTrade
 function InitiateTrade(unit)
     if TradeBlock:ShouldBlock() then
-        local targetName = UnitName(unit)
-        if targetName then
-            targetName = strsplit("-", targetName)
-            local isGuildMember = BR:IsGuildMember(targetName)
-            
-            if not isGuildMember then
-                if BR.ShowWarningPopup then
-                    BR:ShowWarningPopup("Handel blockiert", "Handel mit " .. targetName .. " nicht erlaubt.\nKein Gildenmitglied!", 4)
-                else
-                    BR:Notify("Handel mit " .. targetName .. " nicht möglich - kein Gildenmitglied!", "warning")
-                end
-                return
+        -- Prüfe direkt mit UnitIsInMyGuild auf die Unit
+        local isGuildMember = false
+        local targetName = UnitName(unit) or "Unbekannt"
+        
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            isGuildMember = UnitIsInMyGuild(unit)
+            BR:Debug("InitiateTrade: UnitIsInMyGuild('" .. unit .. "') = " .. tostring(isGuildMember))
+        end
+        
+        -- Fallback auf Namen-Prüfung
+        if not isGuildMember then
+            local shortName = strsplit("-", targetName)
+            isGuildMember = BR:IsGuildMember(shortName)
+            BR:Debug("InitiateTrade: IsGuildMember('" .. shortName .. "') = " .. tostring(isGuildMember))
+        end
+        
+        if not isGuildMember then
+            if BR.ShowWarningPopup then
+                BR:ShowWarningPopup("Handel blockiert", "Handel mit " .. strsplit("-", targetName) .. " nicht erlaubt.\nKein Gildenmitglied!", 4)
+            else
+                BR:Notify("Handel mit " .. strsplit("-", targetName) .. " nicht möglich - kein Gildenmitglied!", "warning")
             end
+            return
         end
     end
     

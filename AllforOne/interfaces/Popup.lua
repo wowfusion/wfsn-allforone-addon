@@ -24,7 +24,7 @@ function BR.Popup:Show(options)
     local titleColor = options.titleColor or {1, 0.5, 0}
     local messageColor = options.messageColor or {1, 1, 1}
     local borderColor = options.borderColor or {1, 0.5, 0, 1}
-    local displayTime = options.displayTime or 5
+    local displayTime = options.displayTime or 7
     local playSound = options.playSound
     -- rumble removed
     local iconPath = options.icon
@@ -77,9 +77,62 @@ function BR.Popup:Show(options)
     messageText:SetText(message)
     messageText:SetTextColor(messageColor[1], messageColor[2], messageColor[3])
     
+    -- Button (optional)
+    local buttonFrame
+    if options.buttonText then
+        yOffset = yOffset - messageText:GetStringHeight() - 12
+        
+        -- Use SecureActionButton if spell casting is needed
+        if options.buttonSpell then
+            buttonFrame = CreateFrame("Button", nil, frame, "SecureActionButtonTemplate, UIPanelButtonTemplate")
+            buttonFrame:RegisterForClicks("AnyUp", "AnyDown")
+            buttonFrame:SetAttribute("type1", "spell")
+            buttonFrame:SetAttribute("spell1", options.buttonSpell)
+            buttonFrame:SetScript("PostClick", function()
+                if options.buttonCallback then
+                    options.buttonCallback()
+                end
+                -- Close popup after button click
+                C_Timer.After(0.1, function()
+                    frame:Hide()
+                    frame:SetParent(nil)
+                    for i, popup in ipairs(BR.Popup.activePopups) do
+                        if popup == frame then
+                            table.remove(BR.Popup.activePopups, i)
+                            break
+                        end
+                    end
+                end)
+            end)
+        elseif options.buttonCallback then
+            buttonFrame = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+            buttonFrame:SetScript("OnClick", function()
+                options.buttonCallback()
+                -- Close popup after button click
+                frame:Hide()
+                frame:SetParent(nil)
+                for i, popup in ipairs(BR.Popup.activePopups) do
+                    if popup == frame then
+                        table.remove(BR.Popup.activePopups, i)
+                        break
+                    end
+                end
+            end)
+        end
+        
+        if buttonFrame then
+            buttonFrame:SetSize(180, 26)
+            buttonFrame:SetPoint("TOP", frame, "TOP", 0, yOffset)
+            buttonFrame:SetText(options.buttonText)
+        end
+    end
+    
     -- Adjust frame height based on content
     local contentHeight = 18 + titleText:GetStringHeight() + 8 + messageText:GetStringHeight() + 18
     if iconFrame then
+        contentHeight = contentHeight + 38
+    end
+    if buttonFrame then
         contentHeight = contentHeight + 38
     end
     frame:SetHeight(math.max(BR.UI.PopupMinHeight, contentHeight))
@@ -127,15 +180,18 @@ end
 ----------------------------------------------------------------------
 --  Convenience Methods
 ----------------------------------------------------------------------
-function BR.Popup:ShowWarning(title, message, displayTime)
+function BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
     return self:Show({
         title = title,
         message = message,
         titleColor = {1, 0.2, 0.2},
         messageColor = {1, 1, 1},
         borderColor = {0.8, 0.1, 0.1, 1},
-        displayTime = displayTime or 5,
-        playSound = BR.Sounds.Warning
+        displayTime = displayTime or 7,
+        playSound = BR.Sounds.Warning,
+        buttonText = buttonText,
+        buttonCallback = buttonCallback,
+        buttonSpell = buttonSpell
     })
 end
 
@@ -146,7 +202,7 @@ function BR.Popup:ShowError(title, message, displayTime)
         titleColor = {1, 0.2, 0.2},
         messageColor = {1, 0.8, 0.8},
         borderColor = {0.8, 0, 0, 1},
-        displayTime = displayTime or 5,
+        displayTime = displayTime or 7,
         playSound = BR.Sounds.Error
     })
 end
@@ -158,7 +214,7 @@ function BR.Popup:ShowSuccess(title, message, displayTime)
         titleColor = {0.2, 1, 0.2},
         messageColor = {0.9, 1, 0.9},
         borderColor = {0, 0.7, 0, 1},
-        displayTime = displayTime or 4,
+        displayTime = displayTime or 6,
         playSound = BR.Sounds.Success
     })
 end
@@ -170,7 +226,7 @@ function BR.Popup:ShowInfo(title, message, displayTime)
         titleColor = {0.4, 0.8, 1},
         messageColor = {1, 1, 1},
         borderColor = {0.3, 0.6, 1, 1},
-        displayTime = displayTime or 4,
+        displayTime = displayTime or 6,
     })
 end
 
@@ -194,8 +250,8 @@ function BR:ShowPopup(options)
     return BR.Popup:Show(options)
 end
 
-function BR:ShowWarningPopup(title, message, displayTime)
-    return BR.Popup:ShowWarning(title, message, displayTime)
+function BR:ShowWarningPopup(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
+    return BR.Popup:ShowWarning(title, message, displayTime, buttonText, buttonCallback, buttonSpell)
 end
 
 function BR:ShowErrorPopup(title, message, displayTime)

@@ -485,16 +485,6 @@ function AdminPanel:CreateFrame()
     self.contentFrame = scrollChild
     self.frame = frame
     
-    -- Back to settings button
-    local backBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    backBtn:SetSize(120, 24)
-    backBtn:SetPoint("BOTTOMLEFT", 20, 18)
-    backBtn:SetText("< Einstellungen")
-    backBtn:SetScript("OnClick", function()
-        frame:Hide()
-        BR:OpenConfig()
-    end)
-    
     -- Stats at bottom
     local statsText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     statsText:SetPoint("BOTTOM", 0, 32)
@@ -514,6 +504,11 @@ end
 
 function AdminPanel:Show()
     -- Only officers can access this panel
+    -- Warte auf Guild-Daten falls noch nicht bereit
+    if not BR:IsGuildDataReady() then
+        BR:Print("Guild-Daten werden noch geladen. Bitte versuche es in wenigen Sekunden erneut.", "warning")
+        return
+    end
     if not BR:IsGuildOfficer() then
         BR:Print("Die Offizier-Übersicht ist nur für Gildenoffiziere verfügbar.", "warning")
         return
@@ -733,6 +728,9 @@ function AdminPanel:UpdateMemberList()
         -- Player name
         local nameText = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         nameText:SetPoint("LEFT", 5, 0)
+        nameText:SetWidth(colWidths.name - 10)
+        nameText:SetJustifyH("LEFT")
+        nameText:SetWordWrap(false)
         local displayName = member.displayName or member.shortName or "?"
         local classColor = member.classFileName and RAID_CLASS_COLORS[member.classFileName]
         if member.isOnline and classColor then
@@ -742,8 +740,6 @@ function AdminPanel:UpdateMemberList()
         else
             nameText:SetText("|cFF666666" .. displayName .. "|r")
         end
-        nameText:SetWidth(colWidths.name - 10)
-        nameText:SetJustifyH("LEFT")
         
         -- Status (addon state)
         local statusText = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
