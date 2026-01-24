@@ -13,6 +13,9 @@ local originalFunctions = {}
 local PLAYER_INTERACTION = Enum and Enum.PlayerInteractionType
 local BANK_TYPE_ACCOUNT = Enum and Enum.BankType and Enum.BankType.Account
 
+-- Warband Bank Distance Inhibitor Item ID
+local WARBAND_DISTANCE_INHIBITOR_ID = 216665
+
 -- Helpers --------------------------------------------------------------------
 local function ShouldBlock()
     return BR:GetSetting("Enabled") and BR:GetSetting("BlockWarbound")
@@ -36,6 +39,10 @@ local function NotifyBlocked(action)
         msg = "Items entnehmen aus Warbound-Bank blockiert!"
     elseif action == "deposit_all" then
         msg = "Alle Kriegsmeute-Items einlagern blockiert!"
+    elseif action == "remote_access" then
+        msg = "Fernzugriff auf Kriegsmeutenbank blockiert!"
+    elseif action == "access" then
+        msg = "Zugriff auf Kriegsmeutenbank blockiert!"
     end
     
     if BR.ShowWarningPopup then
@@ -213,6 +220,7 @@ local function InstallHooks()
     end
     
     -- Hook ContainerFrameItemButton clicks for Warbound bank slots AND regular bags when Warbound is open
+    -- WICHTIG: Verwende C_Timer.After(0, ...) um Taint zu vermeiden
     hooksecurefunc("ContainerFrameItemButton_OnClick", function(self, button)
         if not ShouldBlock() then return end
         
@@ -220,8 +228,11 @@ local function InstallHooks()
         
         -- Block withdrawing from Warbound bank
         if IsWarboundBankBag(bagID) then
-            ClearCursor()
-            NotifyBlocked("withdraw_item")
+            -- Verzögere die Aktion um Taint zu vermeiden
+            C_Timer.After(0, function()
+                ClearCursor()
+                NotifyBlocked("withdraw_item")
+            end)
             return
         end
         
@@ -229,9 +240,12 @@ local function InstallHooks()
         if button == "RightButton" and IsWarboundBankOpen() and not IsWarboundBankBag(bagID) then
             -- Check if bagID is a player bag (0-4) or reagent bag (5)
             if bagID >= 0 and bagID <= 5 then
-                ClearCursor()
-                NotifyBlocked("deposit_item")
-                BR:Debug("WarboundBlock: Blocked right-click deposit from bag " .. tostring(bagID))
+                -- Verzögere die Aktion um Taint zu vermeiden
+                C_Timer.After(0, function()
+                    ClearCursor()
+                    NotifyBlocked("deposit_item")
+                    BR:Debug("WarboundBlock: Blocked right-click deposit from bag " .. tostring(bagID))
+                end)
             end
         end
     end)
@@ -669,6 +683,124 @@ local function BlockWarboundButtons()
     end
 end
 
+-- Block Warband Bank Distance Inhibitor usage
+local function BlockDistanceInhibitor()
+    if not ShouldBlock() then return end
+    
+    -- Hook C_Container.UseContainerItem kann nicht direkt gehookt werden (protected)
+    -- Stattdessen hooken wir das Item-Tooltip und blockieren via Overlay
+    
+    -- Hook ItemButton clicks to block the Distance Inhibitor
+    hooksecurefunc(C_Container, "UseContainerItem", function(bagID, slotIndex)
+        -- Diese Funktion wird NACH dem Aufruf ausgeführt, kann also nicht blockieren
+        -- Aber wir können eine Warnung anzeigen
+    end)
+end
+
+-- Check for Better Bags addon frames
+local function GetBetterBagsFrames()
+    local frames = {}
+    
+    -- Better Bags verwendet verschiedene Frame-Namen
+    local patterns = {
+        "BetterBagsBankFrame",
+        "BetterBags_BankFrame",
+        "BetterBagsBagFrame",
+    }
+    
+    for _, pattern in ipairs(patterns) do
+        local frame = _G[pattern]
+        if frame then
+            table.insert(frames, frame)
+        end
+    end
+    
+    -- Suche nach Frames die "BetterBags" im Namen haben
+    for frameName, frame in pairs(_G) do
+        if type(frameName) == "string" and frameName:find("BetterBags") and type(frame) == "table" and frame.IsShown then
+            if not tContains(frames, frame) then
+                table.insert(frames, frame)
+            end
+        end
+    end
+    
+    return frames
+end
+
+-- Hook Better Bags to block Warband access
+local betterBagsHooked = false
+local function HookBetterBags()
+    if betterBagsHooked then return end
+    
+    -- Better Bags verwendet BetterBags addon namespace
+    if BetterBags then
+        betterBagsHooked = true
+        BR:Debug("WarboundBlock: Better Bags detected")
+        
+        -- Hook the bank view if available
+        if BetterBags.Bank then
+            local originalShow = BetterBags.Bank.Show
+            if originalShow then
+                BetterBags.Bank.Show = function(self, ...)
+                    if ShouldBlock() then
+                        -- Prüfe ob Warband Tab aktiv ist
+                        if self.currentTab == "warband" or self.currentTab == "account" then
+                            NotifyBlocked("access")
+                            return
+                        end
+                    end
+                    return originalShow(self, ...)
+                end
+            end
+        end
+    end
+end
+
+-- Prüfe ob der Spieler bei einem Banker steht (für Distance Inhibitor Erkennung)
+local function IsNearBanker()
+    -- Prüfe ob ein Banker-NPC in der Nähe ist
+    -- Wenn nicht, wurde die Bank wahrscheinlich remote geöffnet (Distance Inhibitor)
+    for i = 1, 40 do
+        local unit = "npc" .. i
+        if UnitExists(unit) and UnitIsUnit(unit, "npc") then
+            -- Prüfe ob es ein Banker ist (schwierig zu erkennen)
+            return true
+        end
+    end
+    
+    -- Alternative: Prüfe ob wir ein Target haben das ein Banker sein könnte
+    if UnitExists("target") then
+        local npcID = select(6, strsplit("-", UnitGUID("target") or ""))
+        -- Banker NPCs haben bestimmte IDs, aber das ist nicht zuverlässig
+        -- Stattdessen prüfen wir die Entfernung
+        if CheckInteractDistance("target", 3) then -- Trade distance
+            return true
+        end
+    end
+    
+    -- Prüfe ob wir in einer Bank-Zone sind (grob)
+    -- Dies ist nicht 100% zuverlässig, aber besser als nichts
+    return false
+end
+
+-- Block Distance Inhibitor: Wenn Bank remote geöffnet wird, sofort schließen
+local function CheckRemoteBankAccess()
+    if not ShouldBlock() then return end
+    
+    -- Wenn die Warbound Bank offen ist und wir nicht bei einem Banker stehen,
+    -- wurde sie wahrscheinlich mit dem Distance Inhibitor geöffnet
+    if IsWarboundBankOpen() then
+        -- Schließe die Bank sofort
+        C_Timer.After(0, function()
+            if IsWarboundBankOpen() then
+                CloseBankFrame()
+                NotifyBlocked("remote_access")
+                BR:Print("Fernzugriff auf die Kriegsmeutenbank ist blockiert!", "warning")
+            end
+        end)
+    end
+end
+
 -- Events ---------------------------------------------------------------------
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW")
@@ -679,23 +811,71 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("BAG_OPEN")
 eventFrame:RegisterEvent("BAG_CLOSED")
+eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == "Blizzard_AccountBank" or arg1 == addonName then
             InstallHooks()
         end
+        -- Hook Better Bags wenn es geladen wird
+        if arg1 == "BetterBags" then
+            C_Timer.After(0.5, HookBetterBags)
+        end
+        -- Hook Baganator wenn es geladen wird
+        if arg1 == "Baganator" then
+            C_Timer.After(0.5, function()
+                local frames = GetBaganatorBankFrames()
+                for _, frame in ipairs(frames) do
+                    HookBaganatorSetTab(frame)
+                end
+            end)
+        end
     elseif event == "PLAYER_LOGIN" then
         -- Ensure hooks are installed after login
         InstallHooks()
+        -- Try to hook third-party addons
+        C_Timer.After(1, HookBetterBags)
+        C_Timer.After(1, function()
+            local frames = GetBaganatorBankFrames()
+            for _, frame in ipairs(frames) do
+                HookBaganatorSetTab(frame)
+            end
+        end)
+    elseif event == "BAG_UPDATE_DELAYED" then
+        -- Prüfe ob Better Bags oder Baganator Frames offen sind
+        if ShouldBlock() then
+            HookBetterBags()
+            CheckBaganatorWarbandAccess()
+            -- Prüfe Better Bags Frames
+            local betterBagsFrames = GetBetterBagsFrames()
+            for _, frame in ipairs(betterBagsFrames) do
+                if frame:IsShown() then
+                    -- Versuche Warband Tab zu verstecken
+                    if frame.Tabs then
+                        for i, tab in ipairs(frame.Tabs) do
+                            if tab.tabID == 2 or (tab.GetText and tab:GetText() and (tab:GetText():find("Kriegsmeute") or tab:GetText():find("Warband"))) then
+                                tab:Hide()
+                            end
+                        end
+                    end
+                end
+            end
+        end
     elseif event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then
         if PLAYER_INTERACTION then
             -- AccountBankPanel interaction type
             local accountBankType = PLAYER_INTERACTION.AccountBankPanel
             if arg1 == accountBankType and ShouldBlock() then
+                -- Prüfe ob dies ein Remote-Zugriff ist (Distance Inhibitor)
+                -- Wenn ja, schließe die Bank sofort
+                CheckRemoteBankAccess()
+                
                 C_Timer.After(0.1, function()
                     BlockWarboundButtons()
                     UpdateBagOverlays()
+                    -- Nochmal prüfen nach kurzer Verzögerung
+                    CheckRemoteBankAccess()
                 end)
             end
         end

@@ -209,10 +209,12 @@ function TooltipEnhance:HookTooltip()
             if not playerName then return end
             
             -- Check if in same guild
+            -- Methode 1: UnitIsInMyGuild ist am zuverlässigsten
+            local isInMyGuild = UnitIsInMyGuild(unit)
             local unitGuild = GetGuildInfo(unit)
             local myGuild = GetGuildInfo("player")
             
-            if unitGuild and myGuild and unitGuild == myGuild then
+            if isInMyGuild or (unitGuild and myGuild and unitGuild == myGuild) then
                 -- Same guild - show addon status and faction background
                 self:SetFactionBackground(tooltip, unit)
                 self:AddAddonInfo(tooltip, playerName)
@@ -220,8 +222,8 @@ function TooltipEnhance:HookTooltip()
                 -- Different guild
                 tooltip:AddLine(" ")
                 tooltip:AddLine("|cFFFF6600[Andere Gilde: " .. unitGuild .. "]|r", 1, 0.4, 0)
-            else
-                -- No guild
+            elseif not isInMyGuild then
+                -- No guild (nur anzeigen wenn wir sicher sind dass sie nicht in unserer Gilde sind)
                 tooltip:AddLine(" ")
                 tooltip:AddLine("|cFF888888[Keine Gilde]|r", 0.5, 0.5, 0.5)
             end

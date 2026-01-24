@@ -22,7 +22,7 @@ local GuildMap = {
 
 -- Konstanten
 local UPDATE_INTERVAL = 5 -- Sekunden zwischen Position-Updates
-local DEFAULT_PIN_SIZE = 32 -- Standardgröße (größer als vorher)
+local DEFAULT_PIN_SIZE = 10 -- Standardgröße (klein für bessere Übersicht)
 local DEFAULT_FONT_SIZE = 12 -- Standardschriftgröße
 local STALE_TIMEOUT = 120 -- 2 Minuten ohne Update = Position entfernen
 
@@ -100,8 +100,8 @@ function GuildMap:CreatePin(memberInfo)
     if not pin then
         -- Pin an Canvas anhängen
         pin = CreateFrame("Button", pinName, WorldMapFrame:GetCanvas())
-        pin:SetFrameStrata("TOOLTIP") -- Höchste Strata, über allem
-        pin:SetFrameLevel(9999) -- Sehr hoher Level, über dem Spielerpfeil
+        pin:SetFrameStrata("MEDIUM") -- Unter dem Spielerpfeil
+        pin:SetFrameLevel(50) -- Niedriger Level, unter dem Spielerpfeil
         pin:SetSize(pinSize, pinSize)
         
         -- Schwarzer Umriss (Border) - leicht größer als der Hauptpunkt
@@ -973,11 +973,14 @@ function GuildMap:HandlePositionMessage(message, sender)
     local level = tonumber(parts[7])
     local zone = parts[8]
     
+    BR:Debug("GuildMap: Received message from sender=" .. tostring(sender) .. ", name=" .. tostring(name))
+    
     if not name or not mapID or not x or not y then return end
     
-    -- Eigene Position ignorieren
+    -- Eigene Position ignorieren (vergleiche auch mit Realm-Namen)
     local myName = UnitName("player")
-    if name == myName then return end
+    local myFullName = myName .. "-" .. GetRealmName()
+    if name == myName or name == myFullName then return end
     
     -- Position speichern
     self.memberPositions[name] = {

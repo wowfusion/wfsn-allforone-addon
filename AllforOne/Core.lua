@@ -364,7 +364,7 @@ function BR:InitializeDefaults()
         ShowWelcomeOnLogin = true,
         GuildMapEnabled = true, -- Gildenkarte aktiviert
         GuildMapShowNames = true, -- Spielernamen anzeigen
-        GuildMapPinSize = 32, -- Größe der Gildenkarten-Pins (16-64)
+        GuildMapPinSize = 10, -- Größe der Gildenkarten-Pins (10-64)
     }
     
     for key, value in pairs(defaults) do
@@ -411,7 +411,10 @@ function BR:IsGuildDataReady()
 end
 
 function BR:IsGuildMember(playerName)
-    if not self:IsInGuild() then return false end
+    if not self:IsInGuild() then 
+        self:Debug("IsGuildMember: Spieler ist nicht in einer Gilde")
+        return false 
+    end
     
     -- Remove realm name if present
     local name = playerName
@@ -419,16 +422,42 @@ function BR:IsGuildMember(playerName)
         name = strsplit("-", name)
     end
     
+    if not name or name == "" then
+        self:Debug("IsGuildMember: Kein gültiger Spielername")
+        return false
+    end
+    
+    -- Methode 1: UnitIsInMyGuild (funktioniert für Spieler in Reichweite/Target)
+    -- Dies ist die zuverlässigste Methode für Spieler die man sehen kann
+    if UnitIsInMyGuild then
+        local isInGuild = UnitIsInMyGuild(name)
+        if isInGuild then
+            self:Debug("IsGuildMember: " .. name .. " ist Gildenmitglied (UnitIsInMyGuild)")
+            return true
+        end
+    end
+    
+    -- Methode 2: Gildenliste durchsuchen
+    -- Stelle sicher dass die Gildenliste geladen ist
+    if C_GuildInfo and C_GuildInfo.GuildRoster then
+        C_GuildInfo.GuildRoster()
+    end
+    
     local numMembers = GetNumGuildMembers()
+    self:Debug("IsGuildMember: Prüfe " .. name .. " gegen " .. numMembers .. " Gildenmitglieder")
+    
     for i = 1, numMembers do
         local guildMemberName = GetGuildRosterInfo(i)
         if guildMemberName then
             local guildMemberShort = strsplit("-", guildMemberName)
-            if guildMemberShort and name and guildMemberShort:lower() == name:lower() then
+            if guildMemberShort and guildMemberShort:lower() == name:lower() then
+                self:Debug("IsGuildMember: " .. name .. " ist Gildenmitglied (gefunden als " .. guildMemberName .. ")")
                 return true
             end
         end
     end
+    
+    self:Debug("IsGuildMember: " .. name .. " ist KEIN Gildenmitglied")
     return false
 end
 
