@@ -2,106 +2,40 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
-## [1.0.4] - 2026-01-23
+## [1.0.2] - 2026-01-24
 
-### Neu
+### Verbessert
+- **Kriegsmeutenbank-Block für externe Addons**: 
+  - BetterBags wird jetzt vollständig blockiert (Warband-Tabs werden versteckt)
+  - Baganator wird jetzt vollständig blockiert (automatischer Wechsel zum Charakter-Tab)
+- **Cross-Faction Gildenhandel**: Handel zwischen Horde und Allianz Gildenmitgliedern funktioniert jetzt korrekt
+- **Gildenkarten Pin-Größe**: Standard-Größe ist jetzt 10px (vorher 16px)
 - **Gildenkalender-Integration**: Der Gildentreffpunkt-Tooltip zeigt jetzt das nächste geplante Gildenmeeting an
-  - Liest automatisch Gilden-Events aus dem WoW-Kalender aus
-  - Zeigt Titel, Datum und Uhrzeit des nächsten Meetings
-  - Funktioniert auf Weltkarte und Minimap
-
-### Behoben
-- **Gildenleiter-Einstellungen beim Login**: Gildenmeister und Offiziere können jetzt direkt nach dem Einloggen ihre Einstellungen ändern und synchronisieren
-- **Gildenname in den Optionen**: Der Gildenname wird jetzt korrekt angezeigt, auch direkt nach dem Login (vorher wurde "Keine Gilde" angezeigt)
-- **Neue WoW API Kompatibilität**: Das Addon wartet jetzt korrekt auf das Laden der Gildendaten bevor Guild-Funktionen verwendet werden
-  - Verwendet `C_GuildInfo.GuildRoster()` für die neue API
-  - Reagiert auf `GUILD_ROSTER_UPDATE` und `PLAYER_GUILD_UPDATE` Events
-  - Einstellungsfenster aktualisiert sich automatisch wenn Gildendaten verfügbar werden
-- **Himmelsreiten-Sperre komplett überarbeitet**:
-  - Die Option kann jetzt vom Gildenmeister in den Einstellungen aktiviert/deaktiviert werden
-  - Erkennt jetzt zuverlässig ob Statisches Fliegen oder Himmelsreiten aktiv ist
-  - Prüft Flugstil-Buffs (Spell IDs 404464/404468) und CVar
-  - Neues Popup mit direktem "Auf Statisch wechseln" Button
-  - Der Button castet den Spell "Flugstil wechseln" direkt
-- **Gildenkarten Pin-Größe**: Pins werden jetzt auf allen Karten gleich groß angezeigt (unabhängig vom Zoom)
-  - Pin-Größe kann jetzt von 10px bis 64px eingestellt werden
-
-## [1.0.3] - 2026-01-22
-
-### Neu
 - **Gildentreffpunkt auf Minimap**: Der Gildentreffpunkt wird jetzt auch auf der Minimap angezeigt
-  - Verwendet HereBeDragons Library für korrekte Positionierung
-  - Icon bleibt am Rand sichtbar wenn außerhalb des Minimap-Bereichs
-  - Unterstützt Minimap-Rotation
-- **Einstellungen zurücksetzen**: Neuer Button in den Addon-Optionen
-  - Setzt alle Einstellungen auf Standardwerte zurück
-  - Synchronisiert automatisch mit Gildenmeister/Offizier wenn online
-
-### Verbessert
-- **Erweiterte Einstellungs-Verschlüsselung**: Zusätzliche Schutzmaßnahmen
-  - Briefkasten-Modus wird jetzt ebenfalls verschlüsselt
-  - Spielzeit-Daten (totalTimePlayed) sind geschützt
-  - Geschützte Variablen werden sortiert gespeichert
-- **Gildentreffpunkt Icon**: Neues verbessertes Icon (icon2-allforone)
+- **Himmelsreiten-Sperre**: Erkennt jetzt zuverlässig ob Statisches Fliegen oder Himmelsreiten aktiv ist
 
 ### Behoben
-- Minimap-Pin für Gildentreffpunkt bewegt sich nicht mehr mit dem Spieler
-- Korrektes Icon für Gildentreffpunkt auf Welt- und Minikarte
+- **Tooltip "Keine Gilde" Bug**: Gildenmitglieder werden im Gruppen-Tooltip jetzt korrekt erkannt
+- **UseContainerItem() Taint-Fehler**: Geschützte Funktionen werden jetzt korrekt verzögert aufgerufen
+- **TooltipEnhance Fehler**: "Secret value" Fehler bei Unit-Tooltips behoben
+- **Gildenleiter-Einstellungen beim Login**: Gildenmeister und Offiziere können jetzt direkt nach dem Einloggen ihre Einstellungen ändern
+- **Gildenkarten Pin-Größe**: Pins werden jetzt auf allen Karten gleich groß angezeigt
 
-## [1.0.2] - 2026-01-17
+### Geändert
+- **Startnachrichten**: Nur noch Version und Hilfe-Hinweis beim Login
+- **Motivations-Nachricht**: Neue Gildenmotivation beim Login
+- **Status-Anfragen**: Nur noch für Offiziere und Gildenmeister sichtbar
+- **Status-Sync**: Zählung zeigt jetzt korrekt alle Online-Mitglieder an
 
 ### Neu
+- **Einstellungen zurücksetzen**: Neuer Button in den Addon-Optionen
 - **Gildenkarte**: Zeigt die Positionen aller Gildenmitglieder auf der Weltkarte an
-  - Automatische Synchronisation der Positionen alle 5 Sekunden
-  - Farbige Punkte in Klassenfarben für bessere Übersicht
-  - Tooltip mit Name, Level und Zone beim Überfahren
-  - Rechtsklick auf Pin öffnet Flüster-Chat
-  - Pins werden immer über dem eigenen Spielerpfeil angezeigt
-  - **Pin-Größe einstellbar** in den Optionen (16-64 Pixel)
-
-### Sonstige Änderungen:
-- Briefkasten-Modus kann jetzt zwischen "Komplett blockieren" und "Nur Fremde blockieren" umgestellt werden
-- Kriegsmeutenbank wird jetzt vollständig blockiert (Tab wird ausgeblendet)
-- Unterstützung für Baganator und andere Taschen-Addons bei der Kriegsmeutenbank-Blockierung
-- **Himmelsreiten-Sperre**: Aufmounten wird blockiert wenn "Flugstil: Himmelsreiten" aktiv ist (bis Max-Level)
-  - Erkennung basiert auf Buff-IDs (Himmelsreiten: 404464, Statisch: 404468)
-  - Button zum direkten Wechsel auf statisches Fliegen im Popup
-  - Ausnahmen für Drachenreit-Quests und Rennen
-- Popup-Meldungen werden jetzt länger angezeigt (+2 Sekunden)
-- Gruppeneinladungen: NPCs (Quest-Begleiter) sind jetzt in Gruppen erlaubt
-
-### Verbessert
-- Neues, übersichtlicheres Einstellungsfenster
-- Dungeonsuche funktioniert jetzt im Tutorial-Gebiet (Insel der Verbannten)
-- Einstellungen werden schneller zwischen Gildenmitgliedern synchronisiert
-
-### Behoben
-- Lokale Einstellungen (Töne, Willkommensbildschirm) werden jetzt korrekt gespeichert
-- Kriegsmeutenbank: Items können nicht mehr per Rechtsklick eingelagert werden
-- Post vom Handwerkerkonsortium / Artisan's Consortium wird trotz Block aktiv zugestellt
-- Willkommensbildschirm: URL-Kopie-Dialog funktioniert wieder zuverlässig
 
 ## [1.0.1] - 2026-01-17
 
 ### Hinzugefügt
 - Initiale Release-Version
-- Guild Check Modul
-- Trade Block Modul
-- Group Block Modul
-- LFG Block Modul
-- Auction Block Modul
-- Mail Block Modul
-- Crafting Order Block Modul
-- Warbound Block Modul
-- Admin Panel
-- Welcome Screen
-- Minimap Icon
-- Security Check Modul
-- Chat Filter Modul
-- Tooltip Enhance Modul
-
-### Geändert
-- Keine
-
-### Behoben
-- Keine
+- Guild Check, Trade Block, Group Block, LFG Block Module
+- Auction Block, Mail Block, Crafting Order Block, Warbound Block Module
+- Admin Panel, Welcome Screen, Minimap Icon
+- Security Check, Chat Filter, Tooltip Enhance Module

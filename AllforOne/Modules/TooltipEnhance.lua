@@ -197,22 +197,32 @@ function TooltipEnhance:HookTooltip()
     -- Use TooltipDataProcessor for retail (modern API)
     if TooltipDataProcessor then
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
-            if tooltip ~= GameTooltip then return end
+            -- Sichere Prüfungen um Fehler zu vermeiden
+            if not tooltip or tooltip ~= GameTooltip then return end
             
-            local _, unit = tooltip:GetUnit()
-            if not unit then return end
+            -- Verwende pcall für alle Unit-Operationen um "secret value" Fehler zu vermeiden
+            local unit
+            local success = pcall(function()
+                local _, u = tooltip:GetUnit()
+                if u and UnitExists(u) and UnitIsPlayer(u) then
+                    unit = u
+                end
+            end)
             
-            -- Only for players
-            if not UnitIsPlayer(unit) then return end
+            if not success or not unit then return end
             
             local playerName = UnitName(unit)
             if not playerName then return end
             
-            -- Check if in same guild
-            local unitGuild = GetGuildInfo(unit)
-            local myGuild = GetGuildInfo("player")
+            -- Check if in same guild (alles in pcall um Fehler zu vermeiden)
+            local isInMyGuild, unitGuild, myGuild
+            pcall(function()
+                isInMyGuild = UnitIsInMyGuild(unit)
+                unitGuild = GetGuildInfo(unit)
+                myGuild = GetGuildInfo("player")
+            end)
             
-            if unitGuild and myGuild and unitGuild == myGuild then
+            if isInMyGuild or (unitGuild and myGuild and unitGuild == myGuild) then
                 -- Same guild - show addon status and faction background
                 self:SetFactionBackground(tooltip, unit)
                 self:AddAddonInfo(tooltip, playerName)
@@ -220,8 +230,8 @@ function TooltipEnhance:HookTooltip()
                 -- Different guild
                 tooltip:AddLine(" ")
                 tooltip:AddLine("|cFFFF6600[Andere Gilde: " .. unitGuild .. "]|r", 1, 0.4, 0)
-            else
-                -- No guild
+            elseif not isInMyGuild then
+                -- No guild (nur anzeigen wenn wir sicher sind dass sie nicht in unserer Gilde sind)
                 tooltip:AddLine(" ")
                 tooltip:AddLine("|cFF888888[Keine Gilde]|r", 0.5, 0.5, 0.5)
             end
