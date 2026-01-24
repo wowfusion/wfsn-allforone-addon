@@ -25,6 +25,7 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - **Startnachrichten**: Nur noch Version und Hilfe-Hinweis beim Login
 - **Motivations-Nachricht**: Neue Gildenmotivation beim Login
 - **Status-Anfragen**: Nur noch für Offiziere und Gildenmeister sichtbar
+- **Status-Sync**: Zählung zeigt jetzt korrekt alle Online-Mitglieder an
 
 ### Neu
 - **Einstellungen zurücksetzen**: Neuer Button in den Addon-Optionen
