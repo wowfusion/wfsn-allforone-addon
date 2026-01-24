@@ -26,6 +26,22 @@ local CVAR_FLIGHT_STYLE = "dynamicFlightMountedOption"
 -- Spell ID für Flugstil wechseln
 local SPELL_SWITCH_FLIGHT_STYLE = 436854
 
+-- Druiden Fluggestalt Spell-IDs
+local DRUID_FLIGHT_FORM_SPELLS = {
+    [783] = true,    -- Travel Form (beinhaltet Fluggestalt)
+    [33943] = true,  -- Flight Form
+    [40120] = true,  -- Swift Flight Form
+    [165962] = true, -- Travel Form (Fluggestalt-Variante)
+}
+
+-- Druiden Fluggestalt Buff-IDs (zum Erkennen ob aktiv)
+local DRUID_FLIGHT_FORM_BUFFS = {
+    165962, -- Flight Form
+    783,    -- Travel Form (kann Fluggestalt sein)
+    33943,  -- Flight Form (alt)
+    40120,  -- Swift Flight Form (alt)
+}
+
 -- Quest IDs related to dragonriding training/races (exceptions)
 local DRAGONRIDING_QUEST_IDS = {
     [68795] = true, -- Dragonriding intro
@@ -43,6 +59,9 @@ function DragonFlyingBlock:OnInitialize()
     C_Timer.After(1, function()
         DragonFlyingBlock:CreateGlobalSwitchButton()
     end)
+    -- Prüfe ob Spieler ein Druide ist
+    self.isDruid = (select(2, UnitClass("player")) == "DRUID")
+    BR:Debug("DragonFlyingBlock: Player is Druid: " .. tostring(self.isDruid))
 end
 
 function DragonFlyingBlock:OnEnable()
@@ -368,6 +387,53 @@ function DragonFlyingBlock:CheckAndDismount()
     end
 end
 
+-- Prüft ob der Spieler sich aktuell in Druiden-Fluggestalt befindet
+function DragonFlyingBlock:IsInDruidFlightForm()
+    if not self.isDruid then return false end
+    if not C_UnitAuras then return false end
+    
+    for _, buffID in ipairs(DRUID_FLIGHT_FORM_BUFFS) do
+        local auraData = C_UnitAuras.GetPlayerAuraBySpellID(buffID)
+        if auraData then
+            -- Bei Travel Form (783) prüfen ob wir wirklich fliegen
+            if buffID == 783 then
+                -- Nur als Fluggestalt zählen wenn wir fliegen können/sind
+                if IsFlying() or IsFlyableArea() then
+                    BR:Debug("DragonFlyingBlock: Druid in Travel Form (flying context)")
+                    return true
+                end
+            else
+                BR:Debug("DragonFlyingBlock: Druid in Flight Form (buff " .. buffID .. ")")
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Bricht die Druiden-Fluggestalt ab
+function DragonFlyingBlock:CancelDruidFlightForm()
+    if not self.isDruid then return end
+    
+    -- CancelShapeshiftForm() bricht die aktuelle Gestaltwandlung ab
+    if CancelShapeshiftForm then
+        CancelShapeshiftForm()
+        self:ShowBlockMessage()
+        BR:Debug("DragonFlyingBlock: Cancelled Druid Flight Form (Skyriding active)")
+    end
+end
+
+-- Prüft und blockiert Druiden-Fluggestalt wenn nötig
+function DragonFlyingBlock:CheckDruidFlightForm()
+    if not self.isDruid then return end
+    if not self:ShouldBlock() then return end
+    
+    -- Prüfe ob Druide in Fluggestalt ist
+    if self:IsInDruidFlightForm() then
+        self:CancelDruidFlightForm()
+    end
+end
+
 function DragonFlyingBlock:SetupEvents()
     local eventFrame = CreateFrame("Frame")
     
@@ -375,6 +441,7 @@ function DragonFlyingBlock:SetupEvents()
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
     eventFrame:RegisterEvent("UNIT_AURA")
     eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED") -- Für Mount-Spell Erkennung
+    eventFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM") -- Für Druiden-Gestaltwandlung
     
     eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
         if event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
@@ -403,16 +470,40 @@ function DragonFlyingBlock:SetupEvents()
             elseif not IsMounted() then
                 DragonFlyingBlock.wasMounted = false
             end
+            
+            -- Druiden-Fluggestalt Check
+            if DragonFlyingBlock.isDruid then
+                C_Timer.After(0.1, function()
+                    DragonFlyingBlock:CheckDruidFlightForm()
+                end)
+            end
         elseif event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
             -- Check if a mount spell was cast
             local spellID = select(3, ...)
             if spellID then
-                -- Prüfe nach kurzer Verzögerung ob wir gemountet sind
-                C_Timer.After(0.2, function()
-                    if IsMounted() then
-                        BR:Debug("DragonFlyingBlock: Mount spell detected (ID: " .. spellID .. ")")
-                        DragonFlyingBlock:CheckAndDismount()
-                    end
+                -- Prüfe ob es ein Druiden-Fluggestalt-Spell ist
+                if DragonFlyingBlock.isDruid and DRUID_FLIGHT_FORM_SPELLS[spellID] then
+                    BR:Debug("DragonFlyingBlock: Druid Flight Form spell detected (ID: " .. spellID .. ")")
+                    -- Kurze Verzögerung damit die Form aktiviert wird
+                    C_Timer.After(0.15, function()
+                        DragonFlyingBlock:CheckDruidFlightForm()
+                    end)
+                else
+                    -- Prüfe nach kurzer Verzögerung ob wir gemountet sind
+                    C_Timer.After(0.2, function()
+                        if IsMounted() then
+                            BR:Debug("DragonFlyingBlock: Mount spell detected (ID: " .. spellID .. ")")
+                            DragonFlyingBlock:CheckAndDismount()
+                        end
+                    end)
+                end
+            end
+        elseif event == "UPDATE_SHAPESHIFT_FORM" then
+            -- Druide hat Gestalt gewechselt
+            if DragonFlyingBlock.isDruid then
+                BR:Debug("DragonFlyingBlock: UPDATE_SHAPESHIFT_FORM triggered")
+                C_Timer.After(0.1, function()
+                    DragonFlyingBlock:CheckDruidFlightForm()
                 end)
             end
         end
