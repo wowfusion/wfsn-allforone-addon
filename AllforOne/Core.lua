@@ -616,27 +616,38 @@ end
 function BR:PingGuildMembers()
     if not self:IsInGuild() then return end
     
-    -- Store timestamp of when we pinged
-    AllforOneDB.LastPingTime = time()
-    AllforOneDB.PendingPingResponses = {}
+    -- Store timestamp of when we pinged (per-character to avoid conflicts)
+    AllforOneCharDB.LastPingTime = time()
+    AllforOneCharDB.PendingPingResponses = {}
     
-    -- Get list of online guild members
+    -- Get list of online guild members (excluding self)
     local numMembers = GetNumGuildMembers()
     local onlineCount = 0
+    local myName = UnitName("player"):lower()
     
     for i = 1, numMembers do
         local fullName, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
         if fullName and isOnline then
             local shortName = strsplit("-", fullName)
-            AllforOneDB.PendingPingResponses[shortName:lower()] = true
-            onlineCount = onlineCount + 1
+            local shortNameLower = shortName:lower()
+            -- Eigenen Spieler ausschließen
+            if shortNameLower ~= myName then
+                AllforOneCharDB.PendingPingResponses[shortNameLower] = true
+                onlineCount = onlineCount + 1
+            end
         end
     end
     
     -- Send the ping
     self:SendAddonMessage("PING", "GUILD")
-    self:Debug("Pinged guild - " .. onlineCount .. " online members")
-    self:Print("Status-Anfrage an " .. onlineCount .. " Online-Mitglieder gesendet...", "info")
+    self:Debug("Pinged guild - " .. onlineCount .. " online members (excluding self)")
+    -- Nur Offiziere und GM sehen die Status-Nachricht
+    if self:IsGuildOfficer() then
+        self:Print("Status-Anfrage an " .. onlineCount .. " Online-Mitglieder gesendet...", "info")
+    end
+    
+    -- Eigene Antwort sofort registrieren (wir empfangen unsere eigenen Nachrichten nicht)
+    self:BroadcastStatus()
     
     -- After 10 seconds, check who didn't respond
     C_Timer.After(10, function()
@@ -648,23 +659,25 @@ end
 
 -- Check who responded to the ping
 function BR:CheckPingResponses()
-    if not AllforOneDB.PendingPingResponses then return end
-    if not AllforOneDB.LastPingTime then return end
+    if not AllforOneCharDB.PendingPingResponses then return end
+    if not AllforOneCharDB.LastPingTime then return end
     
-    local pingTime = AllforOneDB.LastPingTime
+    local pingTime = AllforOneCharDB.LastPingTime
     local noResponseCount = 0
     local responseCount = 0
     local totalOnline = 0
     
     -- Check each pending response
-    for name, pending in pairs(AllforOneDB.PendingPingResponses) do
+    for name, pending in pairs(AllforOneCharDB.PendingPingResponses) do
         totalOnline = totalOnline + 1
         local info = AllforOneDB.AddonUsers and AllforOneDB.AddonUsers[name]
         
+        -- Prüfe ob eine Antwort nach dem Ping kam (oder zur gleichen Zeit)
+        -- lastSeen ist ein time() Wert, pingTime auch
         if info and info.lastSeen and info.lastSeen >= pingTime then
             -- Got a response after the ping
             responseCount = responseCount + 1
-            self:Debug("Response received from: " .. name)
+            self:Debug("Response received from: " .. name .. " (lastSeen: " .. info.lastSeen .. ", pingTime: " .. pingTime .. ")")
         else
             -- No response - mark as no addon
             noResponseCount = noResponseCount + 1
@@ -673,15 +686,19 @@ function BR:CheckPingResponses()
             end
             -- Mark as no addon (nil status means no addon)
             AllforOneDB.AddonUsers[name] = nil
-            self:Debug("No response from online player: " .. name .. " (no addon)")
+            local lastSeenStr = info and info.lastSeen and tostring(info.lastSeen) or "nil"
+            self:Debug("No response from online player: " .. name .. " (lastSeen: " .. lastSeenStr .. ", pingTime: " .. pingTime .. ")")
         end
     end
     
     -- Clear pending list
-    AllforOneDB.PendingPingResponses = nil
+    AllforOneCharDB.PendingPingResponses = nil
     
-    -- Show summary
-    self:Print("Status-Sync abgeschlossen: " .. responseCount .. "/" .. totalOnline .. " haben geantwortet.", "info")
+    -- Show summary - nur für Offiziere und GM
+    -- Zeige auch den eigenen Spieler in der Gesamtzahl (+1)
+    if self:IsGuildOfficer() then
+        self:Print("Status-Sync abgeschlossen: " .. (responseCount + 1) .. "/" .. (totalOnline + 1) .. " haben geantwortet.", "info")
+    end
     if noResponseCount > 0 then
         self:Debug(noResponseCount .. " online players have no addon installed")
     end
@@ -1137,12 +1154,6 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
-        
-        if BR:GetSetting("Enabled") then
-            BR:Print("Addon aktiviert für diesen Charakter", "info")
-        else
-            BR:Print("Addon ist deaktiviert. Nutze /br enable zum Aktivieren.", "warning")
-        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
@@ -1261,3 +1272,4 @@ SlashCmdList["ALLFORONE"] = function(msg)
 end
 
 BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
+BR:Print("Für die Gilde, für den Zusammenhalt – bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")

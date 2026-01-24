@@ -21,6 +21,11 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - **Gildenleiter-Einstellungen beim Login**: Gildenmeister und Offiziere können jetzt direkt nach dem Einloggen ihre Einstellungen ändern
 - **Gildenkarten Pin-Größe**: Pins werden jetzt auf allen Karten gleich groß angezeigt
 
+### Geändert
+- **Startnachrichten**: Nur noch Version und Hilfe-Hinweis beim Login
+- **Motivations-Nachricht**: Neue Gildenmotivation beim Login
+- **Status-Anfragen**: Nur noch für Offiziere und Gildenmeister sichtbar
+
 ### Neu
 - **Einstellungen zurücksetzen**: Neuer Button in den Addon-Optionen
 - **Gildenkarte**: Zeigt die Positionen aller Gildenmitglieder auf der Weltkarte an
