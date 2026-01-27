@@ -47,6 +47,7 @@ local DRAGONRIDING_QUEST_IDS = {
     [68795] = true, -- Dragonriding intro
     [68796] = true, -- Dragonriding training
     [72483] = true, -- Advanced Dragonriding
+    [65118] = true, -- Dragonriding intro
 }
 
 -- Race auras (exceptions)
