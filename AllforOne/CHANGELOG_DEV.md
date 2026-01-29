@@ -2,6 +2,25 @@
 
 Technische Änderungen und Details für Entwickler.
 
+## [1.0.3] - 2026-01-28
+
+### Modules/DragonFlyingBlock.lua
+
+#### Zonen-Ausnahmen
+- **Neue `EXCEPTION_ZONE_IDS` Tabelle**: Map-IDs für Zonen, in denen Skyriding erlaubt ist
+  - `2118`: The Forbidden Reach (Dracthyr Tutorial Zone)
+  - `2151`: The Forbidden Reach (Öffentliche Zone)
+  - `2133`: Zaralek Cavern (Dragonflight Season 2)
+
+- **Neue Funktion `IsInExceptionZone()`**: 
+  - Prüft aktuelle Map-ID via `C_Map.GetBestMapForUnit("player")`
+  - Prüft auch Parent-Maps für Subzonen via `C_Map.GetMapInfo(mapID).parentMapID`
+  - Debug-Logging bei Erkennung
+
+- **Integration in `IsInDragonridingException()`**: Ruft `IsInExceptionZone()` auf
+
+---
+
 ## [1.0.2] - 2026-01-24
 
 ### Core.lua

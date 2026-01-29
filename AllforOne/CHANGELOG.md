@@ -2,6 +2,13 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.3] - 2026-01-28
+
+### Verbessert
+- **Himmelsreiten-Sperre**: Zonen-Ausnahmen hinzugefügt - Himmelsreiten ist jetzt in bestimmten Gebieten erlaubt (z.B. Dracthyr Startzone "Die Verbotene Reichweite")
+
+---
+
 ## [1.0.2] - 2026-01-24
 
 ### Verbessert

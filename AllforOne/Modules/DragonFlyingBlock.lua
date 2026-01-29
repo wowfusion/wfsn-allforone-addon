@@ -53,6 +53,14 @@ local DRAGONRIDING_QUEST_IDS = {
 -- Race auras (exceptions)
 local RACE_AURAS = {369968, 377234}
 
+-- Ausgenommene Zonen (Map IDs) - Skyriding wird in diesen Zonen erlaubt
+-- Kann über API erweitert werden: C_Map.GetMapInfo(mapID)
+local EXCEPTION_ZONE_IDS = {
+    [2118] = true, -- The Forbidden Reach (Dracthyr Starting Zone - Tutorial)
+    [2151] = true, -- The Forbidden Reach (Dracthyr Starting Zone - Öffentlich)
+    [2133] = true, -- Zaralek Cavern (Dragonflight Season 2 Zone)
+}
+
 function DragonFlyingBlock:OnInitialize()
     BR:Debug("DragonFlyingBlock module initialized")
     self:SetupEvents()
@@ -130,6 +138,29 @@ function DragonFlyingBlock:IsSkyridingEnabled()
     return true
 end
 
+-- Prüft ob der Spieler in einer ausgenommenen Zone ist
+function DragonFlyingBlock:IsInExceptionZone()
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then return false end
+    
+    -- Direkte Map-ID prüfen
+    if EXCEPTION_ZONE_IDS[mapID] then
+        BR:Debug("DragonFlyingBlock: In exception zone (mapID: " .. mapID .. ")")
+        return true
+    end
+    
+    -- Prüfe auch Parent-Maps (für Subzonen)
+    local mapInfo = C_Map.GetMapInfo(mapID)
+    if mapInfo and mapInfo.parentMapID then
+        if EXCEPTION_ZONE_IDS[mapInfo.parentMapID] then
+            BR:Debug("DragonFlyingBlock: In exception zone via parent (mapID: " .. mapID .. ", parentMapID: " .. mapInfo.parentMapID .. ")")
+            return true
+        end
+    end
+    
+    return false
+end
+
 function DragonFlyingBlock:IsInDragonridingException()
     -- Check active quests for dragonriding content
     for questID, _ in pairs(DRAGONRIDING_QUEST_IDS) do
@@ -150,6 +181,11 @@ function DragonFlyingBlock:IsInDragonridingException()
     
     -- Check for race UI
     if DragonridingPanelFrame and DragonridingPanelFrame:IsShown() then
+        return true
+    end
+    
+    -- Prüfe Zonen-Ausnahmen
+    if self:IsInExceptionZone() then
         return true
     end
     
