@@ -2,7 +2,27 @@
 
 Technische Änderungen und Details für Entwickler.
 
-## [1.0.3] - 2026-01-28
+## [1.0.3] - 2026-01-29
+
+### Modules/SecurityCheck.lua
+
+#### Bug-Fix: Warnung erscheint nicht nach Addon-Reaktivierung
+- **Problem**: Wenn `timeDiff > 3600` (1 Stunde), wurde es fälschlicherweise als "Multi-PC Szenario" behandelt und `wasDisabled` wurde nicht gesetzt
+- **Lösung**: Multi-PC Erkennung verbessert - nur wenn `realTimePassed > timeDiff * 2` (Real-Time ist mehr als doppelt so groß wie /played Differenz)
+- **Neue Logik in `CheckSessionStatus()`**:
+  - Multi-PC Szenario: `realTimePassed > 86400` (> 24h) ODER `timeDiff > 3600 AND realTimePassed > timeDiff * 2`
+  - Addon deaktiviert: `timeDiff > INACTIVITY_THRESHOLD` UND kein Multi-PC Szenario
+
+### build.ps1
+
+#### Bug-Fix: Linux/Mac CurseForge Installation
+- **Problem**: `Compress-Archive` erstellt ZIP-Dateien mit Backslashes (`\`) in den Pfaden
+- **Auswirkung**: CurseForge auf Linux/Mac interpretiert Backslashes als Teil des Dateinamens statt als Verzeichnistrenner
+- **Lösung**: Manuelle ZIP-Erstellung mit .NET `ZipArchive` Klasse und expliziten Forward-Slashes
+- **Geänderte Logik**:
+  ```powershell
+  $entryName = "AllforOne/" + ($relativePath -replace '\\', '/')
+  ```
 
 ### Modules/DragonFlyingBlock.lua
 
