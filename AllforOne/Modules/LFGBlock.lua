@@ -135,7 +135,7 @@ end
 
 function LFGBlock:ShowBlockMessage()
     if BR.ShowWarningPopup then
-        BR:ShowWarningPopup("Dungeonbrowser blockiert", "Der Dungeonbrowser/LFG ist im Guildfound-Modus gesperrt.\nNur Gildengruppen erlaubt!", 4)
+        BR:ShowWarningPopup("Dungeonbrowser blockiert", "Der Dungeonbrowser/LFG ist im Guildfound-Modus gesperrt.", 4)
     else
         BR:Notify("Dungeonbrowser blockiert! Nur Gildengruppen erlaubt.", "warning")
     end
