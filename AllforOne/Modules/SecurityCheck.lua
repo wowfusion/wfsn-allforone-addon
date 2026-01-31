@@ -177,23 +177,32 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     end
     BR:Debug("SecurityCheck: Real time since last update: " .. realTimePassed .. " seconds")
     
-    -- Only trigger warning if:
-    -- 1. Time difference exceeds threshold AND
-    -- 2. Real-world time passed is less than 24 hours (to handle multi-PC scenarios)
-    --    If real time > 24h, player likely just hasn't played this char in a while
-    local isMultiPCScenario = realTimePassed > 86400 -- 24 hours
+    -- Addon war deaktiviert wenn:
+    -- 1. Die /played Zeit ist gestiegen (timeDiff > 0) UND
+    -- 2. Die Zeitdifferenz ist größer als der Threshold UND
+    -- 3. Die Real-Time-Differenz ist KLEINER als die /played Differenz
+    --    (d.h. der Spieler hat gespielt, aber das Addon hat die Zeit nicht getrackt)
+    --
+    -- Multi-PC Szenario: realTimePassed >> timeDiff (Spieler war auf anderem PC)
+    -- Addon deaktiviert: timeDiff >> realTimePassed ODER timeDiff ähnlich realTimePassed aber > Threshold
+    
+    local isMultiPCScenario = false
+    
+    -- Wenn die Real-Time viel größer ist als die /played Differenz, war der Spieler auf einem anderen PC
+    if realTimePassed > 86400 then -- > 24 Stunden seit letztem Login
+        isMultiPCScenario = true
+        BR:Debug("SecurityCheck: Long time since last login, skipping check")
+    elseif timeDiff > 3600 and realTimePassed > timeDiff * 2 then
+        -- Real-Time ist mehr als doppelt so groß wie /played Differenz = Multi-PC
+        isMultiPCScenario = true
+        BR:Debug("SecurityCheck: Multi-PC scenario detected (realTime >> timeDiff)")
+    end
     
     if timeDiff > INACTIVITY_THRESHOLD and not isMultiPCScenario then
-        -- Additional check: if timeDiff is very large (> 1 hour), it's likely a multi-PC scenario
-        -- where the player was playing on another PC
-        if timeDiff > 3600 then
-            BR:Debug("SecurityCheck: Large time difference detected, likely multi-PC scenario")
-            BR:Print("Hinweis: Große Zeitdifferenz erkannt (" .. math.floor(timeDiff/60) .. " Min). Möglicherweise Multi-PC Nutzung.", "info")
-        else
-            charData.wasDisabled = true
-            BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff)
-            BR:Print("WARNUNG: Addon war deaktiviert! Zeitdifferenz: " .. timeDiff .. " Sekunden", "error")
-        end
+        -- Addon war deaktiviert!
+        charData.wasDisabled = true
+        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff .. " seconds, realTime: " .. realTimePassed)
+        BR:Print("WARNUNG: Addon war deaktiviert! Zeitdifferenz: " .. math.floor(timeDiff/60) .. " Minuten", "error")
     end
     
     -- Update stored time

@@ -2,6 +2,64 @@
 
 Technische Änderungen und Details für Entwickler.
 
+## [1.0.3] - 2026-01-29
+
+### Modules/SecurityCheck.lua
+
+#### Bug-Fix: Warnung erscheint nicht nach Addon-Reaktivierung
+- **Problem**: Wenn `timeDiff > 3600` (1 Stunde), wurde es fälschlicherweise als "Multi-PC Szenario" behandelt und `wasDisabled` wurde nicht gesetzt
+- **Lösung**: Multi-PC Erkennung verbessert - nur wenn `realTimePassed > timeDiff * 2` (Real-Time ist mehr als doppelt so groß wie /played Differenz)
+- **Neue Logik in `CheckSessionStatus()`**:
+  - Multi-PC Szenario: `realTimePassed > 86400` (> 24h) ODER `timeDiff > 3600 AND realTimePassed > timeDiff * 2`
+  - Addon deaktiviert: `timeDiff > INACTIVITY_THRESHOLD` UND kein Multi-PC Szenario
+
+### Modules/ChatFilter.lua
+
+#### Bug-Fix: "Secret value" Fehler im Gildenchat
+- **Problem**: WoW gibt manchmal geschützte "secret value" Werte als `message` Parameter zurück
+- **Fehler**: `attempt to index local 'message' (a secret value)` in Zeile 91
+- **Lösung**: `pcall` Wrapper um die message-Prüfung, um geschützte Werte sicher zu erkennen
+- **Geänderte Logik in `AddMessage_Hook()`**:
+  ```lua
+  local success, result = pcall(function()
+      if not message or type(message) ~= "string" then
+          return nil
+      end
+      return message
+  end)
+  if not success or not result then
+      return originalAddMessage[self](self, message, r, g, b, chatID, ...)
+  end
+  ```
+
+### build.ps1
+
+#### Bug-Fix: Linux/Mac CurseForge Installation
+- **Problem**: `Compress-Archive` erstellt ZIP-Dateien mit Backslashes (`\`) in den Pfaden
+- **Auswirkung**: CurseForge auf Linux/Mac interpretiert Backslashes als Teil des Dateinamens statt als Verzeichnistrenner
+- **Lösung**: Manuelle ZIP-Erstellung mit .NET `ZipArchive` Klasse und expliziten Forward-Slashes
+- **Geänderte Logik**:
+  ```powershell
+  $entryName = "AllforOne/" + ($relativePath -replace '\\', '/')
+  ```
+
+### Modules/DragonFlyingBlock.lua
+
+#### Zonen-Ausnahmen
+- **Neue `EXCEPTION_ZONE_IDS` Tabelle**: Map-IDs für Zonen, in denen Skyriding erlaubt ist
+  - `2118`: The Forbidden Reach (Dracthyr Tutorial Zone)
+  - `2151`: The Forbidden Reach (Öffentliche Zone)
+  - `2133`: Zaralek Cavern (Dragonflight Season 2)
+
+- **Neue Funktion `IsInExceptionZone()`**: 
+  - Prüft aktuelle Map-ID via `C_Map.GetBestMapForUnit("player")`
+  - Prüft auch Parent-Maps für Subzonen via `C_Map.GetMapInfo(mapID).parentMapID`
+  - Debug-Logging bei Erkennung
+
+- **Integration in `IsInDragonridingException()`**: Ruft `IsInExceptionZone()` auf
+
+---
+
 ## [1.0.2] - 2026-01-24
 
 ### Core.lua

@@ -44,13 +44,40 @@ if (Test-Path $ZipFilePath) {
     Remove-Item $ZipFilePath -Force
 }
 
-# Create ZIP file
+# Create ZIP file with forward slashes for cross-platform compatibility (Linux/Mac)
 Write-Host "Creating $ZipFileName (Output: $ReleaseDir)..."
-Compress-Archive -Path $AddonDir -DestinationPath $ZipFilePath -CompressionLevel Optimal -Force
 
-if (Test-Path $ZipFilePath) {
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+try {
+    # Create ZIP archive manually with forward slashes
+    $zipStream = [System.IO.File]::Create($ZipFilePath)
+    $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+    
+    # Get all files in the addon directory
+    $files = Get-ChildItem -Path $AddonDir -Recurse -File
+    
+    foreach ($file in $files) {
+        # Create relative path with forward slashes
+        $relativePath = $file.FullName.Substring($AddonDir.Length + 1)
+        $entryName = "AllforOne/" + ($relativePath -replace '\\', '/')
+        
+        # Add file to archive
+        $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+        $entryStream = $entry.Open()
+        $fileStream = [System.IO.File]::OpenRead($file.FullName)
+        $fileStream.CopyTo($entryStream)
+        $fileStream.Close()
+        $entryStream.Close()
+    }
+    
+    $archive.Dispose()
+    $zipStream.Close()
+    
     Write-Host "Successfully created: $ZipFilePath" -ForegroundColor Green
-} else {
-    Write-Error "Failed to create ZIP file"
+    Write-Host "ZIP contains forward-slash paths for Linux/Mac compatibility" -ForegroundColor Cyan
+} catch {
+    Write-Error "Failed to create ZIP file: $_"
     exit 1
 }
