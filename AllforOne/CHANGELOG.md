@@ -10,6 +10,7 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 ### Behoben
 - **Sicherheitswarnung**: Die Warnung erscheint jetzt korrekt wenn das Addon deaktiviert und wieder aktiviert wurde
 - **Linux/Mac Installation**: Das Addon wird jetzt korrekt in den richtigen Unterordner entpackt (CurseForge)
+- **Chat-Filter Fehler**: "Secret value" Fehler im Gildenchat behoben
 
 ---
 

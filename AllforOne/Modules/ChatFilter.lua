@@ -79,28 +79,39 @@ end
 
 -- Hook function to add icon for guild members
 local function AddMessage_Hook(self, message, r, g, b, chatID, ...)
-    -- Safety check
-    if not message or type(message) ~= "string" then
+    -- Safety check using pcall to handle "secret value" errors
+    local success, result = pcall(function()
+        if not message or type(message) ~= "string" then
+            return nil
+        end
+        return message
+    end)
+    
+    -- If pcall failed or message is not a valid string, pass through unchanged
+    if not success or not result then
         return originalAddMessage[self](self, message, r, g, b, chatID, ...)
     end
+    
+    -- Now we know message is a safe string
+    local safeMessage = result
     
     -- Extract player name from the message
     local playerName = nil
     
     -- Try to extract from hyperlink format (covers most cases)
-    playerName = message:match("|Hplayer:([^|]+)|h%[.-%]|h")
+    playerName = safeMessage:match("|Hplayer:([^|]+)|h%[.-%]|h")
     if not playerName then
-        playerName = message:match("|Hplayer:([^|]+)|h")
+        playerName = safeMessage:match("|Hplayer:([^|]+)|h")
     end
     
     -- If not found, try bracket format
     if not playerName then
-        playerName = message:match("%[(.-)%] flüstert:")  -- German whisper
+        playerName = safeMessage:match("%[(.-)%] flüstert:")  -- German whisper
         if not playerName then
-            playerName = message:match("%[(.-)%] whispers:")  -- English whisper
+            playerName = safeMessage:match("%[(.-)%] whispers:")  -- English whisper
         end
         if not playerName then
-            playerName = message:match("^%[(.-)%]:")  -- Say/Yell format
+            playerName = safeMessage:match("^%[(.-)%]:")  -- Say/Yell format
         end
     end
     
@@ -111,14 +122,14 @@ local function AddMessage_Hook(self, message, r, g, b, chatID, ...)
         -- Check if this player is a guild member
         if ChatFilter:IsGuildMember(shortName) then
             -- Check message length to avoid truncation
-            if #message < 200 then
-                message = GUILD_ICON .. " " .. message
+            if #safeMessage < 200 then
+                safeMessage = GUILD_ICON .. " " .. safeMessage
             end
         end
     end
     
     -- Call the original AddMessage
-    return originalAddMessage[self](self, message, r, g, b, chatID, ...)
+    return originalAddMessage[self](self, safeMessage, r, g, b, chatID, ...)
 end
 
 function ChatFilter:HookChatFrames()

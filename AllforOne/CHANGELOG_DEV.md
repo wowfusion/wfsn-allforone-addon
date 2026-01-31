@@ -13,6 +13,25 @@ Technische Änderungen und Details für Entwickler.
   - Multi-PC Szenario: `realTimePassed > 86400` (> 24h) ODER `timeDiff > 3600 AND realTimePassed > timeDiff * 2`
   - Addon deaktiviert: `timeDiff > INACTIVITY_THRESHOLD` UND kein Multi-PC Szenario
 
+### Modules/ChatFilter.lua
+
+#### Bug-Fix: "Secret value" Fehler im Gildenchat
+- **Problem**: WoW gibt manchmal geschützte "secret value" Werte als `message` Parameter zurück
+- **Fehler**: `attempt to index local 'message' (a secret value)` in Zeile 91
+- **Lösung**: `pcall` Wrapper um die message-Prüfung, um geschützte Werte sicher zu erkennen
+- **Geänderte Logik in `AddMessage_Hook()`**:
+  ```lua
+  local success, result = pcall(function()
+      if not message or type(message) ~= "string" then
+          return nil
+      end
+      return message
+  end)
+  if not success or not result then
+      return originalAddMessage[self](self, message, r, g, b, chatID, ...)
+  end
+  ```
+
 ### build.ps1
 
 #### Bug-Fix: Linux/Mac CurseForge Installation
