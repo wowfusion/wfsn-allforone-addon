@@ -79,57 +79,59 @@ end
 
 -- Hook function to add icon for guild members
 local function AddMessage_Hook(self, message, r, g, b, chatID, ...)
-    -- Safety check using pcall to handle "secret value" errors
-    local success, result = pcall(function()
-        if not message or type(message) ~= "string" then
+    -- Try to process the message, but catch any "secret value" errors
+    local success, newMessage = pcall(function()
+        -- These checks will throw if message is a "secret value"
+        if type(message) ~= "string" then
             return nil
         end
-        return message
-    end)
-    
-    -- If pcall failed or message is not a valid string, pass through unchanged
-    if not success or not result then
-        return originalAddMessage[self](self, message, r, g, b, chatID, ...)
-    end
-    
-    -- Now we know message is a safe string
-    local safeMessage = result
-    
-    -- Extract player name from the message
-    local playerName = nil
-    
-    -- Try to extract from hyperlink format (covers most cases)
-    playerName = safeMessage:match("|Hplayer:([^|]+)|h%[.-%]|h")
-    if not playerName then
-        playerName = safeMessage:match("|Hplayer:([^|]+)|h")
-    end
-    
-    -- If not found, try bracket format
-    if not playerName then
-        playerName = safeMessage:match("%[(.-)%] flüstert:")  -- German whisper
-        if not playerName then
-            playerName = safeMessage:match("%[(.-)%] whispers:")  -- English whisper
-        end
-        if not playerName then
-            playerName = safeMessage:match("^%[(.-)%]:")  -- Say/Yell format
-        end
-    end
-    
-    if playerName then
-        -- Remove realm name for lookup
-        local shortName = strsplit("-", playerName)
         
-        -- Check if this player is a guild member
-        if ChatFilter:IsGuildMember(shortName) then
-            -- Check message length to avoid truncation
-            if #safeMessage < 200 then
-                safeMessage = GUILD_ICON .. " " .. safeMessage
+        local msgLen = #message
+        if msgLen == 0 or msgLen >= 200 then
+            return nil
+        end
+        
+        -- Extract player name from the message
+        local playerName = message:match("|Hplayer:([^|]+)|h%[.-%]|h")
+        if not playerName then
+            playerName = message:match("|Hplayer:([^|]+)|h")
+        end
+        
+        -- If not found, try bracket format
+        if not playerName then
+            playerName = message:match("%[(.-)%] flüstert:")  -- German whisper
+        end
+        if not playerName then
+            playerName = message:match("%[(.-)%] whispers:")  -- English whisper
+        end
+        if not playerName then
+            playerName = message:match("^%[(.-)%]:")  -- Say/Yell format
+        end
+        
+        if playerName then
+            -- Remove realm name for lookup
+            local shortName = strsplit("-", playerName)
+            BR:Debug("ChatFilter: Found player " .. tostring(shortName) .. " in message")
+            
+            -- Check if this player is a guild member
+            if ChatFilter:IsGuildMember(shortName) then
+                BR:Debug("ChatFilter: " .. tostring(shortName) .. " is guild member, adding icon")
+                return GUILD_ICON .. " " .. message
+            else
+                BR:Debug("ChatFilter: " .. tostring(shortName) .. " is NOT guild member")
             end
         end
+        
+        return nil
+    end)
+    
+    -- If pcall succeeded and returned a modified message (string), use it
+    if success and type(newMessage) == "string" then
+        return originalAddMessage[self](self, newMessage, r, g, b, chatID, ...)
     end
     
-    -- Call the original AddMessage
-    return originalAddMessage[self](self, safeMessage, r, g, b, chatID, ...)
+    -- Otherwise pass through the original message unchanged
+    return originalAddMessage[self](self, message, r, g, b, chatID, ...)
 end
 
 function ChatFilter:HookChatFrames()
