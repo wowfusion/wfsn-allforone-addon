@@ -75,8 +75,10 @@ try {
     $archive.Dispose()
     $zipStream.Close()
     
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Write-Host "Successfully created: $ZipFilePath" -ForegroundColor Green
     Write-Host "ZIP contains forward-slash paths for Linux/Mac compatibility" -ForegroundColor Cyan
+    Write-Host "Build completed: $timestamp" -ForegroundColor Yellow
 } catch {
     Write-Error "Failed to create ZIP file: $_"
     exit 1

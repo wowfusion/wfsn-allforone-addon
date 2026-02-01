@@ -1,2 +1,9 @@
-install.ps1
-install.ps1
+# Ignore everything
+*
+
+# But not these files/folders
+!.gitignore
+!AllforOne/
+!AllforOne/**
+!README.md
+!LICENSE

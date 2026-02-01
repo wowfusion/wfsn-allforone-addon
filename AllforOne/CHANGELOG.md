@@ -2,7 +2,27 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.4] - 2026-02-01
+
+### Behoben
+- **Kritischer Bug: UI-Taint behoben**: Inventar-Interaktionen (Items benutzen, Reittiere erlernen, Bankfächer kaufen) wurden fälschlicherweise blockiert
+- **Disconnect-Warnung**: "Addon war deaktiviert" Meldung erscheint nicht mehr nach einem Disconnect
+- **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern (Taxi-Flüge)
+- **Pandaren Startgebiet**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (Level 1-10)
+- **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
+
+### Verbessert
+- **Mail Reward NPC Datenbank erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Das Entwicklerteam von WoW)
+- **Himmelsreiten Quest-Ausnahmen**: Weitere Quest IDs hinzugefügt die Himmelsreiten benötigen (65120, 65133, 77345, 68799)
+- **Währungsüberweisung**: "Überweisen"-Button wird jetzt komplett ausgeblendet statt nur blockiert
+
+---
+
 ## [1.0.3] - 2026-01-29
+
+### Neu
+- **Währungsüberweisung blockiert**: Warbound-Währungstransfer zwischen Charakteren wird jetzt blockiert (Abzeichen-Tab)
+- **Mail Reward NPC Datenbank**: Liste von NPCs die Quest-Belohnungen per Post verschicken (Exarch Akama, Grakis)
 
 ### Verbessert
 - **Himmelsreiten-Sperre**: Zonen-Ausnahmen hinzugefügt - Himmelsreiten ist jetzt in bestimmten Gebieten erlaubt (z.B. Dracthyr Startzone "Die Verbotene Reichweite")

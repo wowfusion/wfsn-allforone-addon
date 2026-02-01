@@ -46,6 +46,8 @@ local function NotifyBlocked(action)
         msg = "Fernzugriff auf Kriegsmeutenbank blockiert!"
     elseif action == "access" then
         msg = "Zugriff auf Kriegsmeutenbank blockiert!"
+    elseif action == "currency_transfer" then
+        msg = "Währungsüberweisung zwischen Charakteren blockiert!"
     end
     
     if BR.ShowWarningPopup then
@@ -174,109 +176,44 @@ local function UpdateBagOverlays()
 end
 
 -- Hook Functions -------------------------------------------------------------
+-- IMPORTANT: We do NOT hook C_Bank functions directly because they are PROTECTED.
+-- Hooking protected functions causes "taint" which blocks ALL protected UI actions
+-- (using items, buying bank slots, learning mounts, etc.)
+-- Instead, we use UI-based blocking: hiding tabs, buttons, and using hooksecurefunc
 
 local function InstallHooks()
     if hooksInstalled then return end
     hooksInstalled = true
     
-    -- Hook C_Bank.DepositMoney
+    -- NOTE: C_Bank.DepositMoney, C_Bank.WithdrawMoney, C_Bank.DepositItem, 
+    -- C_Bank.AutoDepositItemsIntoBank are ALL protected functions.
+    -- We CANNOT hook them without causing taint.
+    -- Instead, we hide the Warbound bank tab completely so users can't access it.
+    
+    -- Use hooksecurefunc for safe post-hooks (these don't cause taint)
+    -- They run AFTER the original function, so they can't block, but can warn
+    
     if C_Bank and C_Bank.DepositMoney then
-        originalFunctions.DepositMoney = C_Bank.DepositMoney
-        C_Bank.DepositMoney = function(bankType, amount)
+        hooksecurefunc(C_Bank, "DepositMoney", function(bankType, amount)
             if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
-                NotifyBlocked("deposit_gold")
-                BR:Debug("WarboundBlock: Blocked gold deposit to Account bank")
-                return
-            end
-            return originalFunctions.DepositMoney(bankType, amount)
-        end
-    end
-    
-    -- Hook C_Bank.WithdrawMoney
-    if C_Bank and C_Bank.WithdrawMoney then
-        originalFunctions.WithdrawMoney = C_Bank.WithdrawMoney
-        C_Bank.WithdrawMoney = function(bankType, amount)
-            if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
-                NotifyBlocked("withdraw_gold")
-                BR:Debug("WarboundBlock: Blocked gold withdrawal from Account bank")
-                return
-            end
-            return originalFunctions.WithdrawMoney(bankType, amount)
-        end
-    end
-    
-    -- NOTE: C_Container.UseContainerItem and PickupContainerItem are protected functions
-    -- and cannot be hooked. Item blocking is handled via UI overlays instead.
-    
-    -- Hook C_Bank.DepositItem to block direct deposits
-    if C_Bank and C_Bank.DepositItem then
-        originalFunctions.DepositItem = C_Bank.DepositItem
-        C_Bank.DepositItem = function(bankType, ...)
-            if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
-                NotifyBlocked("deposit_item")
-                BR:Debug("WarboundBlock: Blocked C_Bank.DepositItem to Account bank")
-                ClearCursor()
-                return
-            end
-            return originalFunctions.DepositItem(bankType, ...)
-        end
-    end
-    
-    -- Hook ContainerFrameItemButton clicks for Warbound bank slots AND regular bags when Warbound is open
-    -- WICHTIG: Verwende C_Timer.After(0, ...) um Taint zu vermeiden
-    hooksecurefunc("ContainerFrameItemButton_OnClick", function(self, button)
-        if not ShouldBlock() then return end
-        
-        local bagID = self:GetParent():GetID()
-        
-        -- Block withdrawing from Warbound bank
-        if IsWarboundBankBag(bagID) then
-            -- Verzögere die Aktion um Taint zu vermeiden
-            C_Timer.After(0, function()
-                ClearCursor()
-                NotifyBlocked("withdraw_item")
-            end)
-            return
-        end
-        
-        -- Block right-click deposit from regular bags when Warbound bank is open
-        if button == "RightButton" and IsWarboundBankOpen() and not IsWarboundBankBag(bagID) then
-            -- Check if bagID is a player bag (0-4) or reagent bag (5)
-            if bagID >= 0 and bagID <= 5 then
-                -- Verzögere die Aktion um Taint zu vermeiden
-                C_Timer.After(0, function()
-                    ClearCursor()
-                    NotifyBlocked("deposit_item")
-                    BR:Debug("WarboundBlock: Blocked right-click deposit from bag " .. tostring(bagID))
-                end)
-            end
-        end
-    end)
-    
-    -- Hook clicking on AccountBankPanel item slots to block deposits
-    if AccountBankPanel then
-        hooksecurefunc(AccountBankPanel, "OnMouseUp", function()
-            if ShouldBlock() and CursorHasItem() then
-                ClearCursor()
-                NotifyBlocked("deposit_item")
+                BR:Debug("WarboundBlock: Warning - gold deposited to Account bank")
             end
         end)
     end
     
-    -- Hook C_Bank.AutoDepositItemsIntoBank to block "Deposit All Warband Items" button
-    if C_Bank and C_Bank.AutoDepositItemsIntoBank then
-        originalFunctions.AutoDepositItemsIntoBank = C_Bank.AutoDepositItemsIntoBank
-        C_Bank.AutoDepositItemsIntoBank = function(bankType)
-            if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
-                NotifyBlocked("deposit_all")
-                BR:Debug("WarboundBlock: Blocked auto-deposit all items to Account bank")
-                return
+    -- Hook clicking on AccountBankPanel item slots to clear cursor (safe)
+    if AccountBankPanel then
+        hooksecurefunc(AccountBankPanel, "OnMouseUp", function()
+            if ShouldBlock() and CursorHasItem() then
+                C_Timer.After(0, function()
+                    ClearCursor()
+                    NotifyBlocked("deposit_item")
+                end)
             end
-            return originalFunctions.AutoDepositItemsIntoBank(bankType)
-        end
+        end)
     end
     
-    BR:Debug("WarboundBlock: All hooks installed")
+    BR:Debug("WarboundBlock: Safe hooks installed (no protected function overrides)")
 end
 
 -- Store reference to hidden tabs for restoration
@@ -1456,9 +1393,97 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
+-- Currency Transfer Block ----------------------------------------------------
+-- Block the CurrencyTransferMenu (Warband currency transfers between characters)
+-- NOTE: We only hide the UI, we do NOT hook C_CurrencyInfo functions as they are protected
+
+local function BlockCurrencyTransferMenu()
+    -- Hook CurrencyTransferMenu frame if it exists
+    if CurrencyTransferMenu and not CurrencyTransferMenu.allforoneHooked then
+        -- Hook OnShow - hide immediately
+        CurrencyTransferMenu:HookScript("OnShow", function(self)
+            if ShouldBlock() then
+                -- Hide immediately without delay
+                self:Hide()
+                NotifyBlocked("currency_transfer")
+            end
+        end)
+        
+        -- Also hook the toggle button if it exists
+        if CurrencyTransferMenu.SourceSelector and CurrencyTransferMenu.SourceSelector.Dropdown then
+            -- This prevents the dropdown from opening
+        end
+        
+        CurrencyTransferMenu.allforoneHooked = true
+        BR:Debug("WarboundBlock: CurrencyTransferMenu OnShow hooked")
+    end
+    
+    -- Hide the "Überweisen" / "Transfer" button in TokenFramePopup completely
+    if TokenFramePopup and TokenFramePopup.CurrencyTransferToggleButton and not TokenFramePopup.CurrencyTransferToggleButton.allforoneHooked then
+        local transferButton = TokenFramePopup.CurrencyTransferToggleButton
+        
+        -- Hide the button if blocking is enabled
+        if ShouldBlock() then
+            transferButton:Hide()
+        end
+        
+        -- Hook OnShow to keep it hidden
+        transferButton:HookScript("OnShow", function(self)
+            if ShouldBlock() then
+                self:Hide()
+            end
+        end)
+        
+        -- Also hook TokenFramePopup OnShow to hide the button when popup opens
+        if not TokenFramePopup.allforoneHooked then
+            TokenFramePopup:HookScript("OnShow", function(self)
+                if ShouldBlock() and self.CurrencyTransferToggleButton then
+                    self.CurrencyTransferToggleButton:Hide()
+                end
+            end)
+            TokenFramePopup.allforoneHooked = true
+        end
+        
+        transferButton.allforoneHooked = true
+        BR:Debug("WarboundBlock: CurrencyTransferToggleButton hidden")
+    end
+end
+
+-- NOTE: We do NOT hook C_CurrencyInfo.RequestCurrencyFromAccountCharacter because it's a
+-- protected Blizzard function. Hooking it would "taint" the UI and block ALL protected actions
+-- (like using items, learning mounts, etc.). Instead, we only hide the UI button.
+
+local function BlockCurrencyTransfer()
+    BlockCurrencyTransferMenu()
+    
+    -- Also hide the menu if it's currently shown
+    if ShouldBlock() and CurrencyTransferMenu and CurrencyTransferMenu:IsShown() then
+        CurrencyTransferMenu:Hide()
+        NotifyBlocked("currency_transfer")
+    end
+end
+
+-- Hook when Blizzard_TokenUI loads (it's loaded on demand)
+local function HookCurrencyTransferWhenReady()
+    if CurrencyTransferMenu then
+        BlockCurrencyTransfer()
+    else
+        -- Wait for Blizzard_TokenUI to load
+        local frame = CreateFrame("Frame")
+        frame:RegisterEvent("ADDON_LOADED")
+        frame:SetScript("OnEvent", function(self, event, addonName)
+            if addonName == "Blizzard_TokenUI" then
+                C_Timer.After(0.1, BlockCurrencyTransfer)
+                self:UnregisterEvent("ADDON_LOADED")
+            end
+        end)
+    end
+end
+
 -- Module API -----------------------------------------------------------------
 function WarboundBlock:OnInitialize()
     InstallHooks()
+    HookCurrencyTransferWhenReady()
     BR:Debug("WarboundBlock module initialized")
 end
 

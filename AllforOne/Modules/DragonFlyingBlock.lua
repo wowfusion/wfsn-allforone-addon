@@ -43,11 +43,16 @@ local DRUID_FLIGHT_FORM_BUFFS = {
 }
 
 -- Quest IDs related to dragonriding training/races (exceptions)
+-- These quests REQUIRE Skyriding to complete
 local DRAGONRIDING_QUEST_IDS = {
     [68795] = true, -- Dragonriding intro
     [68796] = true, -- Dragonriding training
     [72483] = true, -- Advanced Dragonriding
     [65118] = true, -- Dragonriding intro
+    [65120] = true, -- Dragonriding quest (requires Skyriding)
+    [65133] = true, -- Dragonriding quest (requires Skyriding)
+    [77345] = true, -- Dragonriding quest (requires Skyriding)
+    [68799] = true, -- Dragonriding quest (requires Skyriding)
 }
 
 -- Race auras (exceptions)
@@ -59,6 +64,10 @@ local EXCEPTION_ZONE_IDS = {
     [2118] = true, -- The Forbidden Reach (Dracthyr Starting Zone - Tutorial)
     [2151] = true, -- The Forbidden Reach (Dracthyr Starting Zone - Öffentlich)
     [2133] = true, -- Zaralek Cavern (Dragonflight Season 2 Zone)
+    -- Death Knight Starting Zone
+    [4298] = true, -- Plaguelands: The Scarlet Enclave (DK Starting Zone)
+    [4281] = true, -- Acherus: The Ebon Hold (old)
+    [7679] = true, -- Acherus: The Ebon Hold (new)
 }
 
 function DragonFlyingBlock:OnInitialize()
@@ -416,6 +425,12 @@ function DragonFlyingBlock:CheckAndDismount()
     -- Called when player mounts - check if we should dismount them
     if not self:ShouldBlock() then return end
     
+    -- Ignore taxi flights (flight master NPCs)
+    if UnitOnTaxi("player") then
+        BR:Debug("DragonFlyingBlock: Player is on taxi - ignoring")
+        return
+    end
+    
     -- Player just mounted with Skyriding active - dismount them!
     if IsMounted() then
         Dismount()
@@ -464,6 +479,12 @@ end
 function DragonFlyingBlock:CheckDruidFlightForm()
     if not self.isDruid then return end
     if not self:ShouldBlock() then return end
+    
+    -- Ignore taxi flights (flight master NPCs)
+    if UnitOnTaxi("player") then
+        BR:Debug("DragonFlyingBlock: Druid on taxi - ignoring")
+        return
+    end
     
     -- Prüfe ob Druide in Fluggestalt ist
     if self:IsInDruidFlightForm() then

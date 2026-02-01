@@ -34,7 +34,9 @@ Write-Host "Installing AllforOne addon..."
 Copy-Item -Path $AddonSource -Destination $AddonDestination -Recurse -Force
 
 if (Test-Path $AddonDestination) {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Write-Host "Successfully installed AllforOne to: $AddonDestination" -ForegroundColor Green
+    Write-Host "Installed: $timestamp" -ForegroundColor Yellow
 } else {
     Write-Error "Failed to install addon"
     exit 1

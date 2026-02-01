@@ -29,9 +29,33 @@ local SENDER_WHITELIST = {
     -- ["blizzard"] = true,
 }
 
+-- NPC Name Whitelist (NPCs that send quest rewards via mail)
+-- These are populated from BR.MailRewardNPCs database
+local NPC_NAME_WHITELIST = {}
+
 function MailBlock:OnInitialize()
     BR:Debug("MailBlock module initialized")
+    self:BuildNPCWhitelist()
     self:SetupHooks()
+end
+
+-- Build NPC name whitelist from MailRewardNPCs database
+function MailBlock:BuildNPCWhitelist()
+    if BR.MailRewardNPCs then
+        for npcID, data in pairs(BR.MailRewardNPCs) do
+            -- Add all localized names from the "names" array
+            if data.names then
+                for _, name in ipairs(data.names) do
+                    NPC_NAME_WHITELIST[name:lower()] = true
+                    BR:Debug("MailBlock: Added NPC name to whitelist: " .. name)
+                end
+            end
+            -- Also add the primary name as fallback
+            if data.name then
+                NPC_NAME_WHITELIST[data.name:lower()] = true
+            end
+        end
+    end
 end
 
 function MailBlock:OnEnable()
@@ -69,14 +93,28 @@ function MailBlock:IsWhitelistedSender(senderName)
     if not senderName then return false end
     local senderLower = senderName:lower()
     
-    -- Check exact match
+    -- Check exact match in system whitelist
     if SENDER_WHITELIST[senderLower] then
+        return true
+    end
+    
+    -- Check exact match in NPC whitelist (Mail Reward NPCs)
+    if NPC_NAME_WHITELIST[senderLower] then
+        BR:Debug("MailBlock: Sender " .. senderName .. " is whitelisted NPC")
         return true
     end
     
     -- Check partial match (for localized names)
     for pattern, _ in pairs(SENDER_WHITELIST) do
         if senderLower:find(pattern, 1, true) then
+            return true
+        end
+    end
+    
+    -- Check partial match for NPCs (in case of realm suffix)
+    for pattern, _ in pairs(NPC_NAME_WHITELIST) do
+        if senderLower:find(pattern, 1, true) then
+            BR:Debug("MailBlock: Sender " .. senderName .. " matches whitelisted NPC pattern: " .. pattern)
             return true
         end
     end

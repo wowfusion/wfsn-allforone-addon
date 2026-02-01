@@ -32,6 +32,7 @@ function SecurityCheck:SetupEvents()
     local frame = CreateFrame("Frame")
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("PLAYER_LEAVING_WORLD")
+    frame:RegisterEvent("PLAYER_LOGOUT")
     frame:RegisterEvent("TIME_PLAYED_MSG")
     
     frame:SetScript("OnEvent", function(_, event, ...)
@@ -40,9 +41,10 @@ function SecurityCheck:SetupEvents()
             SecurityCheck.startServerTime = time()
             RequestTimePlayed()
             SecurityCheck.timeRequested = true
-        elseif event == "PLAYER_LEAVING_WORLD" then
-            -- Save current session time before logout
+        elseif event == "PLAYER_LEAVING_WORLD" or event == "PLAYER_LOGOUT" then
+            -- Save current session time before logout and mark as clean logout
             SecurityCheck:SaveSessionTime()
+            SecurityCheck:MarkCleanLogout()
         elseif event == "TIME_PLAYED_MSG" then
             if SecurityCheck.timeRequested then
                 local totalTimePlayed = ...
@@ -155,6 +157,18 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     BR:Debug("SecurityCheck: Current played time: " .. totalTimePlayed)
     BR:Debug("SecurityCheck: Saved played time: " .. (charData.totalTimePlayed or 0))
     
+    -- Skip check for neutral Pandaren (they can't join guilds until they choose a faction)
+    -- UnitFactionGroup returns nil for neutral Pandaren on Wandering Isle
+    local faction = UnitFactionGroup("player")
+    if faction == nil or faction == "Neutral" then
+        BR:Debug("SecurityCheck: Neutral faction (Pandaren starting zone) - skipping check")
+        charData.totalTimePlayed = totalTimePlayed
+        charData.sessionActive = true
+        charData.lastUpdate = time()
+        charData.lastRealTime = time()
+        return
+    end
+    
     -- First time initialization
     if charData.totalTimePlayed == 0 then
         charData.totalTimePlayed = totalTimePlayed
@@ -180,25 +194,35 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     -- Addon war deaktiviert wenn:
     -- 1. Die /played Zeit ist gestiegen (timeDiff > 0) UND
     -- 2. Die Zeitdifferenz ist größer als der Threshold UND
-    -- 3. Die Real-Time-Differenz ist KLEINER als die /played Differenz
-    --    (d.h. der Spieler hat gespielt, aber das Addon hat die Zeit nicht getrackt)
+    -- 3. Es war KEIN sauberer Logout (DC vs. normaler Logout)
     --
-    -- Multi-PC Szenario: realTimePassed >> timeDiff (Spieler war auf anderem PC)
-    -- Addon deaktiviert: timeDiff >> realTimePassed ODER timeDiff ähnlich realTimePassed aber > Threshold
+    -- Szenarien die wir NICHT als "Addon deaktiviert" werten:
+    -- - Clean Logout: PLAYER_LEAVING_WORLD wurde aufgerufen (normaler Logout/DC mit Addon aktiv)
+    -- - Multi-PC: realTimePassed >> timeDiff (Spieler war auf anderem PC, /played dort erhöht)
+    -- - Sehr lange Abwesenheit: > 24h seit letztem Login
+    --
+    -- Bei einem DC wird PLAYER_LEAVING_WORLD trotzdem aufgerufen wenn das Addon aktiv war.
+    -- Nur wenn das Addon deaktiviert war, wird PLAYER_LEAVING_WORLD NICHT aufgerufen.
     
-    local isMultiPCScenario = false
+    local skipWarning = false
+    
+    -- Check if last session was a clean logout (addon was active)
+    if self:WasCleanLogout() then
+        skipWarning = true
+        BR:Debug("SecurityCheck: Clean logout detected - addon was active last session")
+    end
     
     -- Wenn die Real-Time viel größer ist als die /played Differenz, war der Spieler auf einem anderen PC
     if realTimePassed > 86400 then -- > 24 Stunden seit letztem Login
-        isMultiPCScenario = true
+        skipWarning = true
         BR:Debug("SecurityCheck: Long time since last login, skipping check")
     elseif timeDiff > 3600 and realTimePassed > timeDiff * 2 then
         -- Real-Time ist mehr als doppelt so groß wie /played Differenz = Multi-PC
-        isMultiPCScenario = true
+        skipWarning = true
         BR:Debug("SecurityCheck: Multi-PC scenario detected (realTime >> timeDiff)")
     end
     
-    if timeDiff > INACTIVITY_THRESHOLD and not isMultiPCScenario then
+    if timeDiff > INACTIVITY_THRESHOLD and not skipWarning then
         -- Addon war deaktiviert!
         charData.wasDisabled = true
         BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff .. " seconds, realTime: " .. realTimePassed)
@@ -228,6 +252,24 @@ function SecurityCheck:SaveSessionTime()
         charData.sessionActive = true
         BR:Debug("SecurityCheck: Saved session time. Total: " .. charData.totalTimePlayed)
     end
+end
+
+function SecurityCheck:MarkCleanLogout()
+    local charData = self:GetCharData()
+    charData.cleanLogout = true
+    charData.cleanLogoutTime = time()
+    BR:Debug("SecurityCheck: Marked clean logout at " .. charData.cleanLogoutTime)
+end
+
+function SecurityCheck:WasCleanLogout()
+    local charData = self:GetCharData()
+    if charData.cleanLogout then
+        -- Reset the flag
+        charData.cleanLogout = false
+        BR:Debug("SecurityCheck: Last session was a clean logout")
+        return true
+    end
+    return false
 end
 
 function SecurityCheck:UpdateSessionTime()
