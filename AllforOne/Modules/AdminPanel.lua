@@ -502,50 +502,7 @@ function AdminPanel:CreateFrame()
     tinsert(UISpecialFrames, "AllforOneAdminPanel")
 end
 
--- Simple hash function for developer access verification
-local function SimpleHash(str)
-    local hash = 5381
-    for i = 1, #str do
-        hash = ((hash * 33) + string.byte(str, i)) % 2147483647
-    end
-    return hash
-end
-
--- Developer access hashes (name-realm combinations)
--- To add a new developer: print(SimpleHash("Name-Realm")) and add the hash here
-local DEVELOPER_HASHES = {
-    [22772644] = true, -- Hash of developer character
-}
-
-local function IsDeveloper()
-    local name = UnitName("player")
-    local realm = GetRealmName()
-    if not name or not realm then return false end
-    local combined = name .. "-" .. realm:gsub("%s+", "")
-    local hash = SimpleHash(combined)
-    return DEVELOPER_HASHES[hash] == true
-end
-
 function AdminPanel:Show()
-    -- Developer fallback - always allow access for verified characters
-    local isDeveloper = IsDeveloper()
-    
-    -- Skip all checks for developers
-    if isDeveloper then
-        BR:Debug("AdminPanel:Show() - Developer access granted")
-        if not self.frame then
-            self:CreateFrame()
-        end
-        -- Close config panel if open
-        if AllforOneConfigPanel and AllforOneConfigPanel:IsShown() then
-            AllforOneConfigPanel:Hide()
-        end
-        self:Refresh()
-        self.frame:Show()
-        self:StartAutoRefresh()
-        return
-    end
-    
     -- Only officers can access this panel
     -- Warte auf Guild-Daten falls noch nicht bereit
     if not BR:IsGuildDataReady() then
