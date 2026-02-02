@@ -20,6 +20,14 @@ local BUFF_STEADY_FLIGHT = 404468  -- Flugstil: Statisch
 -- Max Level ist fest auf 80 gesetzt
 local MAX_LEVEL = 80
 
+-- Level ab dem Pfadfinder-Check greift (vorher immer blockieren)
+local PATHFINDER_CHECK_LEVEL = 70
+
+-- The War Within Pathfinder Achievement ID
+-- Spieler MIT Pfadfinder können Statisches Fliegen nutzen -> Himmelsreiten blockiert
+-- Spieler OHNE Pfadfinder brauchen Himmelsreiten für Content -> erlaubt
+local TWW_PATHFINDER_ACHIEVEMENT_ID = 40231
+
 -- CVar für Flugstil (0 = Steady, 1 = Skyriding)
 local CVAR_FLIGHT_STYLE = "dynamicFlightMountedOption"
 
@@ -201,6 +209,13 @@ function DragonFlyingBlock:IsInDragonridingException()
     return false
 end
 
+-- Prüft ob der Spieler den TWW Pfadfinder Achievement hat
+function DragonFlyingBlock:HasPathfinderAchievement()
+    local id, name, points, completed = GetAchievementInfo(TWW_PATHFINDER_ACHIEVEMENT_ID)
+    BR:Debug("DragonFlyingBlock: Pathfinder Achievement check - ID: " .. tostring(id) .. ", completed: " .. tostring(completed))
+    return completed
+end
+
 function DragonFlyingBlock:ShouldBlock()
     -- Basic checks
     if not self.enabled then 
@@ -229,17 +244,40 @@ function DragonFlyingBlock:ShouldBlock()
         return false
     end
     
-    -- Block if Skyriding is enabled (check CVar first, then buff)
-    local skyridingEnabled = self:IsSkyridingEnabled()
-    local hasSkyridingBuff = self:HasSkyridingBuff()
+    -- NEUE LOGIK: Level-basierte Pfadfinder-Prüfung
+    -- Level < 70: Immer blockieren (Statisches Fliegen erzwingen)
+    -- Level 70+: Nur blockieren wenn Spieler Pfadfinder HAT (kann dann Statisch fliegen)
+    --            Ohne Pfadfinder: Himmelsreiten erlauben (braucht es für Content)
     
-    BR:Debug("DragonFlyingBlock:ShouldBlock - Skyriding CVar: " .. tostring(skyridingEnabled) .. ", Buff: " .. tostring(hasSkyridingBuff))
-    
-    if skyridingEnabled or hasSkyridingBuff then
-        return true
+    if playerLevel < PATHFINDER_CHECK_LEVEL then
+        -- Unter Level 70: Immer Himmelsreiten blockieren
+        BR:Debug("DragonFlyingBlock:ShouldBlock - Level " .. playerLevel .. " < " .. PATHFINDER_CHECK_LEVEL .. " - blockieren")
+        
+        -- Nur blockieren wenn Skyriding aktiv ist
+        local skyridingEnabled = self:IsSkyridingEnabled()
+        if skyridingEnabled then
+            return true
+        end
+        return false
+    else
+        -- Level 70+: Pfadfinder-Check
+        local hasPathfinder = self:HasPathfinderAchievement()
+        
+        if hasPathfinder then
+            -- HAT Pfadfinder: Kann Statisches Fliegen nutzen -> Himmelsreiten blockieren
+            BR:Debug("DragonFlyingBlock:ShouldBlock - Has Pathfinder, blocking Skyriding")
+            
+            local skyridingEnabled = self:IsSkyridingEnabled()
+            if skyridingEnabled then
+                return true
+            end
+            return false
+        else
+            -- KEIN Pfadfinder: Braucht Himmelsreiten für Content -> NICHT blockieren
+            BR:Debug("DragonFlyingBlock:ShouldBlock - No Pathfinder, allowing Skyriding for content")
+            return false
+        end
     end
-    
-    return false
 end
 
 -- Globaler SecureActionButton für Flugstil-Wechsel (wird einmalig erstellt)

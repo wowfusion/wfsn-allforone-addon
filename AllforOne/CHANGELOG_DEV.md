@@ -37,6 +37,23 @@ Technische Änderungen und Details für Entwickler.
 - **Hinweis**: `SpellStopCasting()` ist geschützt und kann nicht verwendet werden
 - **Fallback**: Bank wird sofort geschlossen wenn der Spell durchgeht
 
+#### Gildenchat Scham-Feature
+- **Neue Funktion**: `SendShameMessage(action, details)` - Sendet Scham-Nachricht in Gildenchat
+- **Cooldown**: 5 Sekunden zwischen Nachrichten um Spam zu vermeiden
+- **Aktionen**: `deposit_gold`, `withdraw_gold`, `deposit_item`, `withdraw_item`, `deposit_all`
+- **Nachrichtenformat**: "Schande über mich! Ich habe [Item/Gold] entnommen/eingelagert!"
+
+#### Item-Tracking für Scham-Feature
+- **Neue Funktion**: `TrackWarboundBagContents()` - Speichert Inhalt der Warbound Bags
+- **Neue Funktion**: `CheckWarboundBagChanges()` - Vergleicht und erkennt Änderungen
+- **Events**: `BANKFRAME_OPENED` → Track, `BANKFRAME_CLOSED` → Check
+- **Tracking**: Item ID, Stack Count, Item Link pro Slot
+
+#### Verstärkte Post-Hooks
+- **Neu**: `hooksecurefunc(C_Bank, "WithdrawMoney")` - Erkennt Gold-Entnahme
+- **Neu**: `hooksecurefunc(C_Bank, "AutoDepositItemsIntoBank")` - Erkennt Auto-Einlagerung
+- **Alle Hooks**: Lösen jetzt Scham-Nachricht aus wenn Warbound-Bank betroffen
+
 ### Modules/AdminPanel.lua
 
 #### Developer-Check entfernt
@@ -53,6 +70,19 @@ Technische Änderungen und Details für Entwickler.
 
 #### Addon-Kategorie
 - **Hinzugefügt**: `## Category: Guild` für Blizzard Addon-Manager Kategorisierung
+
+### Modules/DragonFlyingBlock.lua
+
+#### Pfadfinder-basierte Himmelsreiten-Logik
+- **Neue Konstanten**:
+  - `PATHFINDER_CHECK_LEVEL = 70`: Level ab dem Pfadfinder-Check greift
+  - `TWW_PATHFINDER_ACHIEVEMENT_ID = 40231`: The War Within Pathfinder Achievement
+- **Neue Funktion**: `HasPathfinderAchievement()` - Prüft ob Spieler Achievement 40231 hat
+- **Geänderte Logik in `ShouldBlock()`**:
+  - Level < 70: Himmelsreiten immer blockiert (Statisches Fliegen erzwungen)
+  - Level 70+, HAT Pfadfinder: Himmelsreiten blockiert (kann Statisch fliegen)
+  - Level 70+, KEIN Pfadfinder: Himmelsreiten erlaubt (braucht es für TWW Content)
+- **Grund**: Spieler ohne Pfadfinder können in Khaz Algar nur mit Himmelsreiten fliegen
 
 ### Modules/SecurityCheck.lua
 

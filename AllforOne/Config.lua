@@ -158,6 +158,7 @@ function Config:CreateFrame()
         {key = "BlockAuction", label = "Auktionshaus blockieren"},
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
+        {key = "EnableShameMessages", label = "Scham-Nachrichten im Gildenchat"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
         {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }
@@ -630,6 +631,7 @@ local function CreateInterfaceOptionsPanel()
         {key = "BlockAuction", label = "Auktionshaus blockieren"},
         {key = "BlockCraftingOrders", label = "Handwerksaufträge einschränken"},
         {key = "BlockWarbound", label = "Warbound-Bank blockieren"},
+        {key = "EnableShameMessages", label = "Scham-Nachrichten im Gildenchat"},
         {key = "BlockMail", label = "Briefkasten einschränken"},
         {key = "BlockDragonFlying", label = "Himmelsreiten bis Lvl 80 blockieren"},
     }

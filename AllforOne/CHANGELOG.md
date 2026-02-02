@@ -13,7 +13,15 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - **Pandaren Startgebiet**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (Level 1-10)
 - **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
 
+### Neu
+- **Gildenchat Scham-Feature**: Wenn jemand trotz Block Items/Gold aus der Kriegsmeutenbank entnimmt oder einlagert, wird automatisch eine Nachricht im Gildenchat gepostet: "Schande über mich! Ich habe [Item/Gold] entnommen/eingelagert!"
+
 ### Verbessert
+- **Himmelsreiten-Sperre mit Pfadfinder**: Neue intelligente Logik für Himmelsreiten:
+  - Level unter 70: Himmelsreiten immer blockiert (Statisches Fliegen erzwungen)
+  - Level 70+: Spieler MIT "The War Within Pfadfinder" Achievement → Himmelsreiten blockiert
+  - Level 70+: Spieler OHNE Pfadfinder → Himmelsreiten erlaubt (für Content benötigt)
+- **Kriegsmeutenbank-Block verstärkt**: Zusätzliche Hooks für Gold Ein-/Auszahlung und Item-Tracking
 - **Kriegsmeutenbank-Tab**: Der Tab wird jetzt unsichtbar gemacht statt mit einem Overlay verdeckt
 - **Addon-Kategorie**: Das Addon erscheint jetzt unter "Guild" in der Blizzard Addon-Liste
 - **Mail Reward NPC Datenbank erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Das Entwicklerteam von WoW)

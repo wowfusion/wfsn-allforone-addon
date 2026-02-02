@@ -152,8 +152,8 @@ function SecurityCheck:GetCharData()
 end
 
 -- Threshold for detecting addon was disabled (in seconds)
--- Higher value to account for long loading screens and multi-PC scenarios
-local INACTIVITY_THRESHOLD = 120
+-- 60 seconds is enough to detect addon deactivation via /reload
+local INACTIVITY_THRESHOLD = 60
 
 function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local charData = self:GetCharData()
@@ -217,19 +217,26 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     
     -- Check if last session was a clean logout (addon was active)
     local wasCleanLogout = self:WasCleanLogout()
-    if not wasCleanLogout then
-        confidenceScore = confidenceScore + SCORE_NO_CLEAN_LOGOUT
-        table.insert(scoreReasons, "Kein sauberer Logout (+" .. SCORE_NO_CLEAN_LOGOUT .. ")")
-        BR:Debug("SecurityCheck: No clean logout detected (+" .. SCORE_NO_CLEAN_LOGOUT .. ")")
+    
+    -- WICHTIG: Wenn /played Zeit signifikant gestiegen ist, war das Addon definitiv deaktiviert
+    -- Das cleanLogout Flag ist nur ein Hinweis, aber /played ist der definitive Beweis
+    -- Denn: Wenn Addon aktiv war, wird totalTimePlayed kontinuierlich aktualisiert
+    -- Wenn Addon deaktiviert war, bleibt totalTimePlayed stehen aber /played steigt
+    
+    -- Check /played time difference ZUERST - das ist der wichtigste Indikator
+    if timeDiff > INACTIVITY_THRESHOLD then
+        -- /played ist gestiegen = Spieler hat gespielt
+        -- Wenn das Addon aktiv gewesen wäre, hätte es totalTimePlayed aktualisiert
+        -- Also war das Addon deaktiviert!
+        confidenceScore = confidenceScore + SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT
+        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min (+" .. (SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT) .. ")")
+        BR:Debug("SecurityCheck: Time difference > threshold - ADDON WAS DISABLED (+" .. (SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT) .. ")")
+    elseif not wasCleanLogout then
+        -- Kein sauberer Logout aber auch keine /played Differenz
+        -- Das könnte ein Crash sein, aber kein Beweis für Deaktivierung
+        BR:Debug("SecurityCheck: No clean logout but no time difference - probably crash, not disabling")
     else
         BR:Debug("SecurityCheck: Clean logout detected - addon was active last session")
-    end
-    
-    -- Check /played time difference
-    if timeDiff > INACTIVITY_THRESHOLD then
-        confidenceScore = confidenceScore + SCORE_TIME_DIFF
-        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min (+" .. SCORE_TIME_DIFF .. ")")
-        BR:Debug("SecurityCheck: Time difference > threshold (+" .. SCORE_TIME_DIFF .. ")")
     end
     
     -- Check gold difference (additional indicator)

@@ -165,6 +165,159 @@ end
 -- (using items, buying bank slots, learning mounts, etc.)
 -- Instead, we use UI-based blocking: hiding tabs, buttons, and using hooksecurefunc
 
+-- Gildenchat Scham-Nachricht senden
+-- Cooldown um Spam zu vermeiden
+local lastShameTime = 0
+local SHAME_COOLDOWN = 5 -- Sekunden zwischen Scham-Nachrichten
+
+local function SendShameMessage(action, details)
+    if not IsInGuild() then return end
+    
+    -- Prüfe ob Scham-Nachrichten aktiviert sind
+    if not BR:GetSetting("EnableShameMessages") then
+        BR:Debug("WarboundBlock: Shame messages disabled")
+        return
+    end
+    
+    -- Cooldown prüfen
+    local now = GetTime()
+    if now - lastShameTime < SHAME_COOLDOWN then
+        BR:Debug("WarboundBlock: Shame message skipped (cooldown)")
+        return
+    end
+    lastShameTime = now
+    
+    local msg = ""
+    if action == "deposit_gold" then
+        local goldText = GetCoinTextureString(details or 0)
+        msg = "Schande über mich! Ich habe " .. goldText .. " in die Kriegsmeutenbank eingezahlt!"
+    elseif action == "withdraw_gold" then
+        local goldText = GetCoinTextureString(details or 0)
+        msg = "Schande über mich! Ich habe " .. goldText .. " aus der Kriegsmeutenbank entnommen!"
+    elseif action == "deposit_item" then
+        if details and details ~= "" then
+            msg = "Schande über mich! Ich habe " .. details .. " in die Kriegsmeutenbank eingelagert!"
+        else
+            msg = "Schande über mich! Ich habe ein Item in die Kriegsmeutenbank eingelagert!"
+        end
+    elseif action == "withdraw_item" then
+        if details and details ~= "" then
+            msg = "Schande über mich! Ich habe " .. details .. " aus der Kriegsmeutenbank entnommen!"
+        else
+            msg = "Schande über mich! Ich habe ein Item aus der Kriegsmeutenbank entnommen!"
+        end
+    elseif action == "deposit_all" then
+        msg = "Schande über mich! Ich habe Items in die Kriegsmeutenbank eingelagert!"
+    end
+    
+    if msg ~= "" then
+        -- Sende in Gildenchat
+        SendChatMessage(msg, "GUILD")
+        BR:Debug("WarboundBlock: Shame message sent to guild chat: " .. msg)
+    end
+end
+
+-- Track item movements to/from Warbound bank
+local trackedWarboundItems = {}
+
+local function TrackWarboundBagContents()
+    if not ShouldBlock() then return end
+    
+    -- Speichere aktuellen Inhalt der Warbound Bags
+    trackedWarboundItems = {}
+    
+    if Enum and Enum.BagIndex then
+        local accountBankFirst = Enum.BagIndex.AccountBankTab_1
+        local accountBankLast = Enum.BagIndex.AccountBankTab_5
+        
+        if accountBankFirst and accountBankLast then
+            for bagID = accountBankFirst, accountBankLast do
+                local numSlots = C_Container.GetContainerNumSlots(bagID)
+                if numSlots and numSlots > 0 then
+                    for slot = 1, numSlots do
+                        local itemInfo = C_Container.GetContainerItemInfo(bagID, slot)
+                        if itemInfo and itemInfo.itemID then
+                            local key = bagID .. "-" .. slot
+                            trackedWarboundItems[key] = {
+                                itemID = itemInfo.itemID,
+                                stackCount = itemInfo.stackCount,
+                                itemLink = itemInfo.hyperlink
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    BR:Debug("WarboundBlock: Tracked " .. (next(trackedWarboundItems) and "items" or "no items") .. " in Warbound bank")
+end
+
+local function CheckWarboundBagChanges()
+    if not ShouldBlock() then return end
+    
+    local oldItems = trackedWarboundItems
+    local newItems = {}
+    
+    if Enum and Enum.BagIndex then
+        local accountBankFirst = Enum.BagIndex.AccountBankTab_1
+        local accountBankLast = Enum.BagIndex.AccountBankTab_5
+        
+        if accountBankFirst and accountBankLast then
+            for bagID = accountBankFirst, accountBankLast do
+                local numSlots = C_Container.GetContainerNumSlots(bagID)
+                if numSlots and numSlots > 0 then
+                    for slot = 1, numSlots do
+                        local itemInfo = C_Container.GetContainerItemInfo(bagID, slot)
+                        if itemInfo and itemInfo.itemID then
+                            local key = bagID .. "-" .. slot
+                            newItems[key] = {
+                                itemID = itemInfo.itemID,
+                                stackCount = itemInfo.stackCount,
+                                itemLink = itemInfo.hyperlink
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Vergleiche: Neue Items = eingelagert, Fehlende Items = entnommen
+    for key, newItem in pairs(newItems) do
+        local oldItem = oldItems[key]
+        if not oldItem then
+            -- Neues Item eingelagert
+            local itemName = newItem.itemLink or ("Item " .. newItem.itemID)
+            BR:Debug("WarboundBlock: DETECTED - Item deposited: " .. itemName)
+            SendShameMessage("deposit_item", itemName)
+        elseif oldItem.stackCount < newItem.stackCount then
+            -- Stack erhöht = eingelagert
+            local itemName = newItem.itemLink or ("Item " .. newItem.itemID)
+            BR:Debug("WarboundBlock: DETECTED - Item stack increased: " .. itemName)
+            SendShameMessage("deposit_item", itemName)
+        end
+    end
+    
+    for key, oldItem in pairs(oldItems) do
+        local newItem = newItems[key]
+        if not newItem then
+            -- Item entnommen
+            local itemName = oldItem.itemLink or ("Item " .. oldItem.itemID)
+            BR:Debug("WarboundBlock: DETECTED - Item withdrawn: " .. itemName)
+            SendShameMessage("withdraw_item", itemName)
+        elseif newItem.stackCount < oldItem.stackCount then
+            -- Stack verringert = entnommen
+            local itemName = oldItem.itemLink or ("Item " .. oldItem.itemID)
+            BR:Debug("WarboundBlock: DETECTED - Item stack decreased: " .. itemName)
+            SendShameMessage("withdraw_item", itemName)
+        end
+    end
+    
+    -- Update tracked items
+    trackedWarboundItems = newItems
+end
+
 local function InstallHooks()
     if hooksInstalled then return end
     hooksInstalled = true
@@ -172,15 +325,40 @@ local function InstallHooks()
     -- NOTE: C_Bank.DepositMoney, C_Bank.WithdrawMoney, C_Bank.DepositItem, 
     -- C_Bank.AutoDepositItemsIntoBank are ALL protected functions.
     -- We CANNOT hook them without causing taint.
-    -- Instead, we hide the Warbound bank tab completely so users can't access it.
+    -- Instead, we use post-hooks to detect and shame users who bypass the block.
     
     -- Use hooksecurefunc for safe post-hooks (these don't cause taint)
-    -- They run AFTER the original function, so they can't block, but can warn
+    -- They run AFTER the original function, so they can't block, but can document/shame
     
+    -- Hook Gold Deposit to Account Bank
     if C_Bank and C_Bank.DepositMoney then
         hooksecurefunc(C_Bank, "DepositMoney", function(bankType, amount)
             if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
-                BR:Debug("WarboundBlock: Warning - gold deposited to Account bank")
+                BR:Debug("WarboundBlock: DETECTED - gold deposited to Account bank: " .. tostring(amount))
+                SendShameMessage("deposit_gold", amount)
+                NotifyBlocked("deposit_gold")
+            end
+        end)
+    end
+    
+    -- Hook Gold Withdraw from Account Bank
+    if C_Bank and C_Bank.WithdrawMoney then
+        hooksecurefunc(C_Bank, "WithdrawMoney", function(bankType, amount)
+            if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
+                BR:Debug("WarboundBlock: DETECTED - gold withdrawn from Account bank: " .. tostring(amount))
+                SendShameMessage("withdraw_gold", amount)
+                NotifyBlocked("withdraw_gold")
+            end
+        end)
+    end
+    
+    -- Hook Auto-Deposit Items to Account Bank
+    if C_Bank and C_Bank.AutoDepositItemsIntoBank then
+        hooksecurefunc(C_Bank, "AutoDepositItemsIntoBank", function(bankType)
+            if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
+                BR:Debug("WarboundBlock: DETECTED - items auto-deposited to Account bank")
+                SendShameMessage("deposit_all", nil)
+                NotifyBlocked("deposit_all")
             end
         end)
     end
@@ -197,7 +375,7 @@ local function InstallHooks()
         end)
     end
     
-    BR:Debug("WarboundBlock: Safe hooks installed (no protected function overrides)")
+    BR:Debug("WarboundBlock: Safe hooks installed with shame messages")
 end
 
 -- Store reference to hidden tabs for restoration
@@ -1216,6 +1394,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         HideBagOverlays()
     elseif event == "BANKFRAME_OPENED" then
         if ShouldBlock() then
+            -- Track Warbound bag contents when bank opens (for shame detection)
+            TrackWarboundBagContents()
             -- Hide Warbound tab immediately when bank opens
             HideWarboundBankTab()
             -- Force normal bank tab as default
@@ -1244,6 +1424,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             end)
         end
     elseif event == "BANKFRAME_CLOSED" then
+        -- Check for Warbound bag changes when bank closes (shame detection)
+        if ShouldBlock() then
+            C_Timer.After(0.1, CheckWarboundBagChanges)
+        end
         StopTabHideTicker()
         HideBagOverlays()
         ShowWarboundBankTab()

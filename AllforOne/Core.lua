@@ -357,6 +357,7 @@ function BR:InitializeDefaults()
         BlockMail = true,
         BlockCraftingOrders = true,
         BlockWarbound = true,
+        EnableShameMessages = true, -- Gildenchat Scham-Nachrichten bei Warbound-Nutzung
         BlockDragonFlying = true, -- Himmelsreiten bis Level 80 blockieren
         MailBlockMode = "selective", -- "full" or "selective"
         DebugMode = false,
