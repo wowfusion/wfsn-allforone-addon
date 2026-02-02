@@ -20,10 +20,18 @@ local SENDER_WHITELIST = {
     -- German
     ["postmeister"] = true,
     ["handwerkerkonsortium"] = true,
+    ["kundensupport"] = true,
+    ["kundendienst"] = true,
+    ["blizzard kundensupport"] = true,
+    ["blizzard kundendienst"] = true,
     -- English
     ["postmaster"] = true,
     ["artisan's consortium"] = true,
     ["artisans consortium"] = true, -- safety net if apostrophes get stripped
+    ["customer support"] = true,
+    ["customer service"] = true,
+    ["blizzard customer support"] = true,
+    ["blizzard customer service"] = true,
     -- System
     -- ["system"] = true,
     -- ["blizzard"] = true,

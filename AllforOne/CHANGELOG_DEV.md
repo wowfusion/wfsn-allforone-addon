@@ -62,6 +62,11 @@ Technische Änderungen und Details für Entwickler.
 - **Grund**: 100% Warbound-Schutz durch Erzwingen des Standard-Blizzard-BankFrames
 - **Benachrichtigung**: User wird informiert wenn Third-Party Frame versteckt wird
 
+### Modules/MailBlock.lua
+
+#### Absender-Whitelist erweitert
+- **Fix**: System-Absender für Blizzard Kundensupport/Kundendienst zur `SENDER_WHITELIST` hinzugefügt, damit Support-Mails nicht geblockt werden
+
 ### Modules/AdminPanel.lua
 
 #### Developer-Check entfernt

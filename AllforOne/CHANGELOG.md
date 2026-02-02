@@ -12,6 +12,7 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern (Taxi-Flüge)
 - **Pandaren Startgebiet**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (Level 1-10)
 - **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
+- **Post vom Kundensupport**: Mails vom Kundensupport/Kundendienst werden nicht mehr fälschlicherweise blockiert
 
 ### Neu
 - **Scham-Feature (Schandelog-Channel)**: Wenn jemand trotz Block Gold in der Kriegsmeutenbank ein-/auszahlt, wird automatisch eine Nachricht im Channel "Schandelog" gepostet (falls vorhanden, sonst im Gildenchat)
