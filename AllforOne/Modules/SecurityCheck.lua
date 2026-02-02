@@ -11,6 +11,12 @@ local SecurityCheck = {
     warningFrame = nil,
 }
 
+-- Confidence Score Thresholds
+local CONFIDENCE_THRESHOLD = 60  -- Warnung nur wenn Score >= 60
+local SCORE_NO_CLEAN_LOGOUT = 50 -- Kein sauberer Logout
+local SCORE_TIME_DIFF = 30       -- /played Differenz > Threshold
+local SCORE_GOLD_CHANGED = 20    -- Gold hat sich geändert
+
 function SecurityCheck:OnInitialize()
     BR:Debug("SecurityCheck module initialized")
     self:SetupEvents()
@@ -204,13 +210,44 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     -- Bei einem DC wird PLAYER_LEAVING_WORLD trotzdem aufgerufen wenn das Addon aktiv war.
     -- Nur wenn das Addon deaktiviert war, wird PLAYER_LEAVING_WORLD NICHT aufgerufen.
     
-    local skipWarning = false
+    -- Confidence Score System
+    -- Kombiniert mehrere Indikatoren um False Positives zu reduzieren
+    local confidenceScore = 0
+    local scoreReasons = {}
     
     -- Check if last session was a clean logout (addon was active)
-    if self:WasCleanLogout() then
-        skipWarning = true
+    local wasCleanLogout = self:WasCleanLogout()
+    if not wasCleanLogout then
+        confidenceScore = confidenceScore + SCORE_NO_CLEAN_LOGOUT
+        table.insert(scoreReasons, "Kein sauberer Logout (+" .. SCORE_NO_CLEAN_LOGOUT .. ")")
+        BR:Debug("SecurityCheck: No clean logout detected (+" .. SCORE_NO_CLEAN_LOGOUT .. ")")
+    else
         BR:Debug("SecurityCheck: Clean logout detected - addon was active last session")
     end
+    
+    -- Check /played time difference
+    if timeDiff > INACTIVITY_THRESHOLD then
+        confidenceScore = confidenceScore + SCORE_TIME_DIFF
+        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min (+" .. SCORE_TIME_DIFF .. ")")
+        BR:Debug("SecurityCheck: Time difference > threshold (+" .. SCORE_TIME_DIFF .. ")")
+    end
+    
+    -- Check gold difference (additional indicator)
+    local currentGold = GetMoney()
+    local lastGold = charData.lastGold or 0
+    local goldChanged = (lastGold > 0 and currentGold ~= lastGold)
+    if goldChanged and timeDiff > INACTIVITY_THRESHOLD then
+        confidenceScore = confidenceScore + SCORE_GOLD_CHANGED
+        local goldDiff = currentGold - lastGold
+        local goldDiffStr = goldDiff > 0 and ("+" .. GetCoinTextureString(goldDiff)) or ("-" .. GetCoinTextureString(math.abs(goldDiff)))
+        table.insert(scoreReasons, "Gold geändert: " .. goldDiffStr .. " (+" .. SCORE_GOLD_CHANGED .. ")")
+        BR:Debug("SecurityCheck: Gold changed from " .. lastGold .. " to " .. currentGold .. " (+" .. SCORE_GOLD_CHANGED .. ")")
+    end
+    
+    BR:Debug("SecurityCheck: Confidence Score: " .. confidenceScore .. "/" .. CONFIDENCE_THRESHOLD)
+    
+    -- Skip warning conditions (override score)
+    local skipWarning = false
     
     -- Wenn die Real-Time viel größer ist als die /played Differenz, war der Spieler auf einem anderen PC
     if realTimePassed > 86400 then -- > 24 Stunden seit letztem Login
@@ -222,12 +259,19 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
         BR:Debug("SecurityCheck: Multi-PC scenario detected (realTime >> timeDiff)")
     end
     
-    if timeDiff > INACTIVITY_THRESHOLD and not skipWarning then
+    -- Warnung nur wenn Confidence Score hoch genug UND keine Skip-Bedingung
+    if confidenceScore >= CONFIDENCE_THRESHOLD and not skipWarning then
         -- Addon war deaktiviert!
         charData.wasDisabled = true
-        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Difference: " .. timeDiff .. " seconds, realTime: " .. realTimePassed)
-        BR:Print("WARNUNG: Addon war deaktiviert! Zeitdifferenz: " .. math.floor(timeDiff/60) .. " Minuten", "error")
+        charData.disabledReasons = scoreReasons
+        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Score: " .. confidenceScore .. ", Reasons: " .. table.concat(scoreReasons, ", "))
+        BR:Print("WARNUNG: Addon war deaktiviert! (Score: " .. confidenceScore .. ")", "error")
+    elseif confidenceScore > 0 and confidenceScore < CONFIDENCE_THRESHOLD then
+        BR:Debug("SecurityCheck: Score too low for warning (" .. confidenceScore .. " < " .. CONFIDENCE_THRESHOLD .. ")")
     end
+    
+    -- Save current gold for next check
+    charData.lastGold = currentGold
     
     -- Update stored time
     charData.totalTimePlayed = totalTimePlayed
@@ -258,7 +302,9 @@ function SecurityCheck:MarkCleanLogout()
     local charData = self:GetCharData()
     charData.cleanLogout = true
     charData.cleanLogoutTime = time()
-    BR:Debug("SecurityCheck: Marked clean logout at " .. charData.cleanLogoutTime)
+    -- Save current gold amount
+    charData.lastGold = GetMoney()
+    BR:Debug("SecurityCheck: Marked clean logout at " .. charData.cleanLogoutTime .. ", Gold: " .. (charData.lastGold or 0))
 end
 
 function SecurityCheck:WasCleanLogout()
