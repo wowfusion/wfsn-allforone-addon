@@ -16,8 +16,9 @@ local CheckBagnonWarbandAccess
 local PLAYER_INTERACTION = Enum and Enum.PlayerInteractionType
 local BANK_TYPE_ACCOUNT = Enum and Enum.BankType and Enum.BankType.Account
 
--- Warband Bank Distance Inhibitor Item ID
+-- Warband Bank Distance Inhibitor Item ID and Spell ID
 local WARBAND_DISTANCE_INHIBITOR_ID = 216665
+local WARBAND_DISTANCE_INHIBITOR_SPELL_ID = 460905
 
 -- Helpers --------------------------------------------------------------------
 local function ShouldBlock()
@@ -825,19 +826,34 @@ local function BlockWarboundButtons()
     end
 end
 
--- Block Warband Bank Distance Inhibitor usage
-local function BlockDistanceInhibitor()
+-- Block Warband Bank Distance Inhibitor usage via spell cast detection
+-- We register for UNIT_SPELLCAST_START and cancel the cast if it's the Distance Inhibitor spell
+local distanceInhibitorFrame = CreateFrame("Frame")
+distanceInhibitorFrame:RegisterEvent("UNIT_SPELLCAST_START")
+distanceInhibitorFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+distanceInhibitorFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
+    if unit ~= "player" then return end
     if not ShouldBlock() then return end
     
-    -- Hook C_Container.UseContainerItem kann nicht direkt gehookt werden (protected)
-    -- Stattdessen hooken wir das Item-Tooltip und blockieren via Overlay
-    
-    -- Hook ItemButton clicks to block the Distance Inhibitor
-    hooksecurefunc(C_Container, "UseContainerItem", function(bagID, slotIndex)
-        -- Diese Funktion wird NACH dem Aufruf ausgeführt, kann also nicht blockieren
-        -- Aber wir können eine Warnung anzeigen
-    end)
-end
+    if spellID == WARBAND_DISTANCE_INHIBITOR_SPELL_ID then
+        if event == "UNIT_SPELLCAST_START" then
+            -- Cancel the cast immediately
+            SpellStopCasting()
+            NotifyBlocked("remote_access")
+            BR:Print("Der Entfernungshämmer ist für dich blockiert!", "warning")
+            BR:Debug("WarboundBlock: Blocked Distance Inhibitor spell cast (ID: " .. spellID .. ")")
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+            -- Cast went through somehow, close the bank immediately
+            C_Timer.After(0.1, function()
+                if IsWarboundBankOpen() then
+                    CloseBankFrame()
+                    NotifyBlocked("remote_access")
+                    BR:Print("Fernzugriff auf die Kriegsmeutenbank ist blockiert!", "warning")
+                end
+            end)
+        end
+    end
+end)
 
 -- Check for Better Bags addon frames
 local function GetBetterBagsFrames()
