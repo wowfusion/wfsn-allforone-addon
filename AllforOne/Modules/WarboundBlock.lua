@@ -396,25 +396,6 @@ local function HideThirdPartyWarbandTabs()
     
     local searchTexts = {"Kriegsmeute", "Warband", "Account Bank"}
     
-    -- Suche in allen sichtbaren Frames nach Warband-Tabs
-    local framesToCheck = {}
-    
-    -- Baganator und Bagnon Frames
-    for frameName, frame in pairs(_G) do
-        if type(frameName) == "string" and type(frame) == "table" then
-            if frameName:find("Baganator") or frameName:find("Bagnon") then
-                if frame.IsShown and pcall(function() return frame:IsShown() end) and frame:IsShown() then
-                    table.insert(framesToCheck, frame)
-                end
-            end
-        end
-    end
-    
-    -- Durchsuche alle gefundenen Frames
-    for _, frame in ipairs(framesToCheck) do
-        HideFramesWithText(frame, searchTexts, 0)
-    end
-    
     -- Spezifische Baganator Tab-Suche und Tab-Wechsel
     local baganatorFrames = GetBaganatorBankFrames()
     for _, frame in ipairs(baganatorFrames) do
@@ -478,44 +459,6 @@ local function HideThirdPartyWarbandTabs()
         end
     end
     
-    -- Suche nach allen Bagnon Frames mit "Kriegsmeute" Text
-    for frameName, frame in pairs(_G) do
-        if type(frameName) == "string" and frameName:find("Bagnon") and type(frame) == "table" then
-            if frame.IsShown and pcall(function() return frame:IsShown() end) and frame:IsShown() then
-                -- Suche nach Kindern mit Kriegsmeute Text
-                if frame.GetChildren then
-                    for i = 1, select("#", frame:GetChildren()) do
-                        local child = select(i, frame:GetChildren())
-                        if child then
-                            -- Prüfe ob es ein Tab/Button mit Kriegsmeute ist
-                            if child.GetText then
-                                local text = child:GetText()
-                                if text and text:find("Kriegsmeute") then
-                                    child:Hide()
-                                    BR:Debug("WarboundBlock: Hidden Bagnon child with text: " .. text)
-                                end
-                            end
-                            -- Prüfe auch Regionen (FontStrings)
-                            if child.GetRegions then
-                                for j = 1, select("#", child:GetRegions()) do
-                                    local region = select(j, child:GetRegions())
-                                    if region and region.GetText then
-                                        local text = region:GetText()
-                                        if text and text:find("Kriegsmeute") then
-                                            child:Hide()
-                                            BR:Debug("WarboundBlock: Hidden Bagnon frame via region: " .. text)
-                                        end
-                                    end
-                                end
-                            end
-                            -- Rekursiv durch Kinder
-                            HideFramesWithText(child, searchTexts, 0)
-                        end
-                    end
-                end
-            end
-        end
-    end
 end
 
 -- Hook Baganator SetTab to prevent switching to Warband tab
@@ -848,7 +791,14 @@ distanceInhibitorFrame:SetScript("OnEvent", function(self, event, unit, castGUID
 end)
 
 -- Check for Better Bags addon frames
+-- Cache the frames to avoid repeated lookups
+local cachedBetterBagsFrames = nil
 local function GetBetterBagsFrames()
+    -- Return cached frames if already found
+    if cachedBetterBagsFrames then
+        return cachedBetterBagsFrames
+    end
+    
     local frames = {}
     
     -- Better Bags verwendet verschiedene Frame-Namen
@@ -865,13 +815,9 @@ local function GetBetterBagsFrames()
         end
     end
     
-    -- Suche nach Frames die "BetterBags" im Namen haben
-    for frameName, frame in pairs(_G) do
-        if type(frameName) == "string" and frameName:find("BetterBags") and type(frame) == "table" and frame.IsShown then
-            if not tContains(frames, frame) then
-                table.insert(frames, frame)
-            end
-        end
+    -- Cache the result if we found any frames
+    if #frames > 0 then
+        cachedBetterBagsFrames = frames
     end
     
     return frames
