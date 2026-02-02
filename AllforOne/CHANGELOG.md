@@ -2,16 +2,20 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
-## [1.0.4] - 2026-02-01
+## [1.0.4] - 2026-02-02
 
 ### Behoben
 - **Kritischer Bug: UI-Taint behoben**: Inventar-Interaktionen (Items benutzen, Reittiere erlernen, Bankfächer kaufen) wurden fälschlicherweise blockiert
+- **Performance-Bug mit BetterBags**: Lag/Freeze beim Looten behoben wenn BetterBags und AllforOne gleichzeitig aktiv waren
+- **Entfernungshämmer blockiert**: Der Fernzugriff auf die Kriegsmeutenbank wird jetzt sofort geschlossen
 - **Disconnect-Warnung**: "Addon war deaktiviert" Meldung erscheint nicht mehr nach einem Disconnect
 - **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern (Taxi-Flüge)
 - **Pandaren Startgebiet**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (Level 1-10)
 - **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
 
 ### Verbessert
+- **Kriegsmeutenbank-Tab**: Der Tab wird jetzt unsichtbar gemacht statt mit einem Overlay verdeckt
+- **Addon-Kategorie**: Das Addon erscheint jetzt unter "Guild" in der Blizzard Addon-Liste
 - **Mail Reward NPC Datenbank erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Das Entwicklerteam von WoW)
 - **Himmelsreiten Quest-Ausnahmen**: Weitere Quest IDs hinzugefügt die Himmelsreiten benötigen (65120, 65133, 77345, 68799)
 - **Währungsüberweisung**: "Überweisen"-Button wird jetzt komplett ausgeblendet statt nur blockiert

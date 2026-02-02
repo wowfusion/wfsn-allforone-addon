@@ -2,7 +2,7 @@
 
 Technische Änderungen und Details für Entwickler.
 
-## [1.0.4] - 2026-02-01
+## [1.0.4] - 2026-02-02
 
 ### Modules/WarboundBlock.lua
 
@@ -17,6 +17,42 @@ Technische Änderungen und Details für Entwickler.
 - **Änderung**: `CurrencyTransferToggleButton` wird jetzt komplett versteckt statt nur blockiert
 - **Grund**: PreClick/OnClick Hooks verhinderten nicht das Verschieben des Charakterfensters
 - **Implementierung**: `transferButton:Hide()` + `OnShow` Hook um Button versteckt zu halten
+
+#### Performance-Bug behoben: BetterBags Lag beim Looten
+- **Problem**: `pairs(_G)` Iterationen in `GetBetterBagsFrames()` und `HideThirdPartyWarbandTabs()` wurden bei jedem `BAG_UPDATE_DELAYED` Event ausgeführt
+- **Auswirkung**: Lag/Freeze beim Looten wenn BetterBags aktiv war (tausende globale Variablen wurden durchsucht)
+- **Lösung**: 
+  - `GetBetterBagsFrames()`: `_G` Iteration komplett entfernt, Frames werden jetzt gecacht
+  - `HideThirdPartyWarbandTabs()`: Zwei `pairs(_G)` Iterationen entfernt, nutzt jetzt nur bekannte Frame-Namen
+
+#### UI-Taint beim Bankfach kaufen behoben (zusätzlich)
+- **Problem**: `BankFrame.TabSystem` Manipulationen verursachten Taint der `PurchaseBankTab()` blockierte
+- **Lösung**: 
+  - Alle direkten `Hide()` Aufrufe auf BankFrame-Elemente entfernt
+  - Neuer Ansatz: Overlay-Frame + `SetAlpha(0)` um Tab unsichtbar zu machen ohne Taint
+  - `hiddenAlphaTab` Variable speichert Referenz für Alpha-Wiederherstellung
+
+#### Entfernungshämmer (Spell 460905) Blocking
+- **Implementierung**: `UNIT_SPELLCAST_SUCCEEDED` Event-Handler für Spell ID 460905
+- **Hinweis**: `SpellStopCasting()` ist geschützt und kann nicht verwendet werden
+- **Fallback**: Bank wird sofort geschlossen wenn der Spell durchgeht
+
+### Modules/AdminPanel.lua
+
+#### Developer-Check entfernt
+- **Grund**: Hash-basierter Developer-Check war nicht sicher da Code auf CurseForge öffentlich ist
+- **Entfernt**: `SimpleHash()`, `DEVELOPER_HASHES`, `IsDeveloper()` Funktionen
+- **Jetzt**: Nur Gildenoffiziere (Rang 0-1) haben Zugang zum AdminPanel
+
+### Core.lua
+
+#### Developer-Fallback entfernt
+- **Entfernt**: Hardcoded Character-Name Check in `IsGuildOfficer()`
+
+### AllforOne.toc
+
+#### Addon-Kategorie
+- **Hinzugefügt**: `## Category: Guild` für Blizzard Addon-Manager Kategorisierung
 
 ### Modules/SecurityCheck.lua
 
