@@ -708,6 +708,17 @@ function AdminPanel:UpdateMemberList()
                 GameTooltip:AddLine("All for One:", 0, 0.8, 1)
                 GameTooltip:AddDoubleLine("  Version:", info.version or "?", 0.7, 0.7, 0.7, 1, 1, 1)
                 GameTooltip:AddDoubleLine("  Status:", isEnabled and "Aktiv" or "Inaktiv", 0.7, 0.7, 0.7, isEnabled and 0 or 1, isEnabled and 1 or 0.5, 0)
+            elseif member.isOnline then
+                -- Check if player might be in an instance (zone contains instance-like keywords)
+                local zone = member.zone or ""
+                local mightBeInInstance = zone:find("%-") or zone == "" or 
+                    zone:find("Mythic") or zone:find("Heroic") or zone:find("Raid") or
+                    zone:find("Arena") or zone:find("Schlachtfeld") or zone:find("Battleground")
+                if mightBeInInstance or zone == "" then
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine("|cFFFFFF00Hinweis:|r Spieler in Instanzen können", 0.8, 0.8, 0.5, true)
+                    GameTooltip:AddLine("möglicherweise nicht antworten.", 0.8, 0.8, 0.5, true)
+                end
             end
             
             GameTooltip:Show()

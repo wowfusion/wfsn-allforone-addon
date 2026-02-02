@@ -82,28 +82,11 @@ local function IsWarboundBankBag(bagID)
 end
 
 -- Check if the bank is currently showing Warbound tab
+-- NOTE: We use pcall to avoid any potential taint from reading BankFrame properties
 local function IsWarboundBankOpen()
-    if not BankFrame or not BankFrame:IsShown() then
-        return false
-    end
-    -- Check if AccountBankPanel is visible
+    -- Only check AccountBankPanel visibility - this is safe and doesn't cause taint
     if AccountBankPanel and AccountBankPanel:IsShown() then
         return true
-    end
-    -- Check BankFrame's active tab type
-    if BankFrame.activeTabIndex then
-        -- Tab index for Warbound is typically 2 or defined in constants
-        local warboundTabIndex = 2
-        if BankFrame.activeTabIndex == warboundTabIndex then
-            return true
-        end
-    end
-    -- Check BankPanel's bankType
-    if BankFrame.BankPanel and BankFrame.BankPanel.GetBankType then
-        local bankType = BankFrame.BankPanel:GetBankType()
-        if bankType == BANK_TYPE_ACCOUNT then
-            return true
-        end
     end
     return false
 end
@@ -637,178 +620,101 @@ local function CheckBaganatorWarbandAccess()
     end
 end
 
+-- Overlay frame to cover the Warbound tab button (makes it unclickable and invisible)
+local warboundTabOverlay = nil
+-- Store reference to hidden tab for alpha restoration
+local hiddenAlphaTab = nil
+
 -- Hide the Warbound Bank tab button
+-- We use an overlay with SetAlpha(0) approach to avoid taint from Hide()
+-- The overlay covers the tab and blocks clicks while making it appear hidden
 local function HideWarboundBankTab()
     if not ShouldBlock() then return end
     
-    -- Hide in Baganator
+    -- Hide in Baganator (third-party addon, safe to manipulate directly)
     HideBaganatorWarboundTabs()
     
-    -- Standard BankFrame handling
-    if not BankFrame then return end
+    -- Standard BankFrame handling - use overlay instead of Hide() to avoid taint
+    if not BankFrame or not BankFrame:IsShown() then return end
     
-    -- Primary method: BankFrame.TabSystem (from /fstack analysis)
-    -- The Warbound bank tab is the second tab (tabID = 2)
-    if BankFrame.TabSystem then
-        local tabSystem = BankFrame.TabSystem
+    -- Defer to next frame to avoid taint during protected actions
+    C_Timer.After(0, function()
+        if not BankFrame or not BankFrame:IsShown() then return end
+        if not ShouldBlock() then return end
         
-        -- Method 1: Check for tabs array
-        if tabSystem.tabs then
-            for i, tab in ipairs(tabSystem.tabs) do
-                -- Tab 2 is the Warbound/Account bank tab
-                if tab and (tab.tabID == 2 or i == 2) then
-                    tab:Hide()
-                    hiddenWarboundTab = tab
-                    BR:Debug("WarboundBlock: Hidden Warbound tab via TabSystem.tabs[" .. i .. "]")
+        -- Find the Warbound tab and cover it with an overlay
+        if BankFrame.TabSystem then
+            local tabSystem = BankFrame.TabSystem
+            local warboundTab = nil
+            
+            -- Find the Warbound tab (tab 2)
+            if tabSystem.tabs and tabSystem.tabs[2] then
+                warboundTab = tabSystem.tabs[2]
+            elseif tabSystem.GetTabButton then
+                warboundTab = tabSystem:GetTabButton(2)
+            end
+            
+            if warboundTab and warboundTab:IsShown() then
+                -- Create overlay if it doesn't exist
+                if not warboundTabOverlay then
+                    warboundTabOverlay = CreateFrame("Frame", "AllforOneWarboundTabOverlay", UIParent)
+                    warboundTabOverlay:SetFrameStrata("DIALOG")
+                    warboundTabOverlay:SetFrameLevel(100)
+                    -- Completely transparent - just blocks clicks
+                    warboundTabOverlay:EnableMouse(true) -- Block clicks
+                    warboundTabOverlay:SetScript("OnMouseDown", function()
+                        NotifyBlocked("access")
+                    end)
                 end
+                
+                -- Make the actual tab invisible using SetAlpha
+                warboundTab:SetAlpha(0)
+                hiddenAlphaTab = warboundTab
+                
+                -- Position overlay over the Warbound tab
+                warboundTabOverlay:ClearAllPoints()
+                warboundTabOverlay:SetPoint("TOPLEFT", warboundTab, "TOPLEFT", 0, 0)
+                warboundTabOverlay:SetPoint("BOTTOMRIGHT", warboundTab, "BOTTOMRIGHT", 0, 0)
+                warboundTabOverlay:Show()
+                
+                BR:Debug("WarboundBlock: Covered Warbound tab with overlay")
             end
         end
-        
-        -- Method 2: Iterate TabSystem children directly
-        for i = 1, tabSystem:GetNumChildren() do
-            local child = select(i, tabSystem:GetChildren())
-            if child then
-                -- Check if this is the second tab or has tabID 2
-                if child.tabID == 2 or child.bankType == BANK_TYPE_ACCOUNT then
-                    child:Hide()
-                    hiddenWarboundTab = child
-                    BR:Debug("WarboundBlock: Hidden Warbound tab via TabSystem child " .. i)
-                end
-                -- Also check by text/label if available
-                if child.Text then
-                    local text = child.Text:GetText()
-                    if text and (text:find("Kriegsmeute") or text:find("Warbound") or text:find("Account")) then
-                        child:Hide()
-                        hiddenWarboundTab = child
-                        BR:Debug("WarboundBlock: Hidden Warbound tab by text: " .. text)
-                    end
-                end
-            end
-        end
-        
-        -- Method 3: Try GetTabButton if available
-        if tabSystem.GetTabButton then
-            local tab = tabSystem:GetTabButton(2)
-            if tab then
-                tab:Hide()
-                hiddenWarboundTab = tab
-                BR:Debug("WarboundBlock: Hidden Warbound tab via GetTabButton(2)")
-            end
-        end
-    end
-    
-    -- Fallback: Search BankFrame children for TabSystem
-    for i = 1, BankFrame:GetNumChildren() do
-        local child = select(i, BankFrame:GetChildren())
-        if child then
-            local name = child:GetName() or ""
-            if name:find("TabSystem") then
-                for j = 1, child:GetNumChildren() do
-                    local tab = select(j, child:GetChildren())
-                    if tab and (tab.tabID == 2 or j == 2) then
-                        tab:Hide()
-                        hiddenWarboundTab = tab
-                        BR:Debug("WarboundBlock: Hidden tab via BankFrame child TabSystem")
-                    end
-                end
-            end
-        end
-    end
+    end)
 end
 
 -- Show the Warbound Bank tab button (when blocking is disabled)
 local function ShowWarboundBankTab()
-    -- Restore Baganator tabs
+    -- Restore Baganator tabs (third-party, safe)
     ShowBaganatorWarboundTabs()
     
-    if not BankFrame then return end
-    
-    -- Restore previously hidden tab
-    if hiddenWarboundTab then
-        hiddenWarboundTab:Show()
-        hiddenWarboundTab = nil
-        BR:Debug("WarboundBlock: Restored hidden Warbound tab")
-        return
+    -- Hide the overlay
+    if warboundTabOverlay then
+        warboundTabOverlay:Hide()
     end
     
-    -- Fallback: Try to find and show
-    if BankFrame.TabSystem then
-        local tabSystem = BankFrame.TabSystem
-        
-        if tabSystem.tabs then
-            for i, tab in ipairs(tabSystem.tabs) do
-                if tab and (tab.tabID == 2 or i == 2) then
-                    tab:Show()
-                end
-            end
-        end
-        
-        for i = 1, tabSystem:GetNumChildren() do
-            local child = select(i, tabSystem:GetChildren())
-            if child and (child.tabID == 2 or child.bankType == BANK_TYPE_ACCOUNT) then
-                child:Show()
-            end
-        end
-        
-        if tabSystem.GetTabButton then
-            local tab = tabSystem:GetTabButton(2)
-            if tab then tab:Show() end
-        end
+    -- Restore alpha on the tab
+    if hiddenAlphaTab then
+        hiddenAlphaTab:SetAlpha(1)
+        hiddenAlphaTab = nil
     end
+    
+    -- Clear the reference (no longer used, but keep for compatibility)
+    hiddenWarboundTab = nil
+    
+    BR:Debug("WarboundBlock: ShowWarboundBankTab called - overlay hidden, alpha restored")
 end
 
 -- Force switch to normal bank tab (tab 1)
+-- NOTE: We no longer manipulate BankFrame.TabSystem to avoid taint!
+-- Instead, we rely on CloseIfWarboundOpen() to close the bank if user clicks Warbound tab
 local function ForceNormalBankTab()
     if not ShouldBlock() then return end
-    if not BankFrame or not BankFrame:IsShown() then return end
     
-    -- Method 1: Use TabSystem to select tab 1
-    if BankFrame.TabSystem then
-        local tabSystem = BankFrame.TabSystem
-        
-        -- Try SetTab method
-        if tabSystem.SetTab then
-            pcall(function() tabSystem:SetTab(1) end)
-            BR:Debug("WarboundBlock: Forced tab 1 via SetTab")
-        end
-        
-        -- Try SelectTab method
-        if tabSystem.SelectTab then
-            pcall(function() tabSystem:SelectTab(1) end)
-            BR:Debug("WarboundBlock: Forced tab 1 via SelectTab")
-        end
-        
-        -- Click the first tab if available
-        if tabSystem.tabs and tabSystem.tabs[1] then
-            pcall(function() tabSystem.tabs[1]:Click() end)
-            BR:Debug("WarboundBlock: Clicked tab 1")
-        end
-        
-        -- Try children
-        for i = 1, tabSystem:GetNumChildren() do
-            local child = select(i, tabSystem:GetChildren())
-            if child and (child.tabID == 1 or i == 1) then
-                if child.Click then
-                    pcall(function() child:Click() end)
-                    BR:Debug("WarboundBlock: Clicked TabSystem child 1")
-                end
-                break
-            end
-        end
-    end
+    -- We intentionally do NOT touch BankFrame.TabSystem anymore
+    -- This was causing taint that blocked PurchaseBankTab()
     
-    -- Method 2: Use BankFrame.SelectTab if available
-    if BankFrame.SelectTab then
-        pcall(function() BankFrame:SelectTab(1) end)
-    end
-    
-    -- Method 3: Show BankPanel, hide AccountBankPanel
-    if BankFrame.BankPanel then
-        BankFrame.BankPanel:Show()
-    end
-    if AccountBankPanel then
-        AccountBankPanel:Hide()
-    end
+    BR:Debug("WarboundBlock: ForceNormalBankTab called (no-op to avoid taint)")
 end
 
 -- Close bank if Warbound is somehow open

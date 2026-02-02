@@ -9,6 +9,7 @@
 ## IconTexture: Interface\AddOns\AllforOne\media\icon-allforone.png
 
 ## X-Website: https://wowfusion.de
+## Category: WoWFusion
 
 # Libraries
 Libs\LibStub\LibStub.lua
