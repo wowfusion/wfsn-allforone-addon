@@ -488,6 +488,12 @@ function BR:IsGuildMember(playerNameOrUnit)
 end
 
 function BR:IsGuildOfficer()
+    -- Developer fallback - always allow access for specific characters
+    local playerName = UnitName("player")
+    if playerName == "EileMarc" then
+        return true
+    end
+    
     if not self:IsInGuild() then return false end
     -- Warte auf Guild-Daten
     if not self.GuildDataReady then

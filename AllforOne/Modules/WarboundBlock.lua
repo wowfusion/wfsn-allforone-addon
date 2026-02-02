@@ -827,31 +827,23 @@ local function BlockWarboundButtons()
 end
 
 -- Block Warband Bank Distance Inhibitor usage via spell cast detection
--- We register for UNIT_SPELLCAST_START and cancel the cast if it's the Distance Inhibitor spell
+-- NOTE: We cannot cancel the cast (SpellStopCasting is protected), but we can close the bank immediately after
 local distanceInhibitorFrame = CreateFrame("Frame")
-distanceInhibitorFrame:RegisterEvent("UNIT_SPELLCAST_START")
 distanceInhibitorFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 distanceInhibitorFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
     if unit ~= "player" then return end
     if not ShouldBlock() then return end
     
     if spellID == WARBAND_DISTANCE_INHIBITOR_SPELL_ID then
-        if event == "UNIT_SPELLCAST_START" then
-            -- Cancel the cast immediately
-            SpellStopCasting()
-            NotifyBlocked("remote_access")
-            BR:Print("Der Entfernungshämmer ist für dich blockiert!", "warning")
-            BR:Debug("WarboundBlock: Blocked Distance Inhibitor spell cast (ID: " .. spellID .. ")")
-        elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-            -- Cast went through somehow, close the bank immediately
-            C_Timer.After(0.1, function()
-                if IsWarboundBankOpen() then
-                    CloseBankFrame()
-                    NotifyBlocked("remote_access")
-                    BR:Print("Fernzugriff auf die Kriegsmeutenbank ist blockiert!", "warning")
-                end
-            end)
-        end
+        -- Cast succeeded - close the bank immediately
+        BR:Debug("WarboundBlock: Distance Inhibitor spell detected (ID: " .. spellID .. "), closing bank...")
+        C_Timer.After(0.1, function()
+            if IsWarboundBankOpen() then
+                CloseBankFrame()
+                NotifyBlocked("remote_access")
+                BR:Print("Fernzugriff auf die Kriegsmeutenbank ist blockiert!", "warning")
+            end
+        end)
     end
 end)
 
