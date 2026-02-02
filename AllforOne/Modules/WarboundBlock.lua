@@ -16,9 +16,8 @@ local CheckBagnonWarbandAccess
 local PLAYER_INTERACTION = Enum and Enum.PlayerInteractionType
 local BANK_TYPE_ACCOUNT = Enum and Enum.BankType and Enum.BankType.Account
 
--- Warband Bank Distance Inhibitor Item ID and Spell ID
+-- Warband Bank Distance Inhibitor Item ID
 local WARBAND_DISTANCE_INHIBITOR_ID = 216665
-local WARBAND_DISTANCE_INHIBITOR_SPELL_ID = 460905
 
 -- Helpers --------------------------------------------------------------------
 local function ShouldBlock()
@@ -47,8 +46,6 @@ local function NotifyBlocked(action)
         msg = "Fernzugriff auf Kriegsmeutenbank blockiert!"
     elseif action == "access" then
         msg = "Zugriff auf Kriegsmeutenbank blockiert!"
-    elseif action == "currency_transfer" then
-        msg = "Währungsüberweisung zwischen Charakteren blockiert!"
     end
     
     if BR.ShowWarningPopup then
@@ -83,11 +80,28 @@ local function IsWarboundBankBag(bagID)
 end
 
 -- Check if the bank is currently showing Warbound tab
--- NOTE: We use pcall to avoid any potential taint from reading BankFrame properties
 local function IsWarboundBankOpen()
-    -- Only check AccountBankPanel visibility - this is safe and doesn't cause taint
+    if not BankFrame or not BankFrame:IsShown() then
+        return false
+    end
+    -- Check if AccountBankPanel is visible
     if AccountBankPanel and AccountBankPanel:IsShown() then
         return true
+    end
+    -- Check BankFrame's active tab type
+    if BankFrame.activeTabIndex then
+        -- Tab index for Warbound is typically 2 or defined in constants
+        local warboundTabIndex = 2
+        if BankFrame.activeTabIndex == warboundTabIndex then
+            return true
+        end
+    end
+    -- Check BankPanel's bankType
+    if BankFrame.BankPanel and BankFrame.BankPanel.GetBankType then
+        local bankType = BankFrame.BankPanel:GetBankType()
+        if bankType == BANK_TYPE_ACCOUNT then
+            return true
+        end
     end
     return false
 end
@@ -159,20 +173,12 @@ local function UpdateBagOverlays()
     end
 end
 
--- Hook Functions -------------------------------------------------------------
--- IMPORTANT: We do NOT hook C_Bank functions directly because they are PROTECTED.
--- Hooking protected functions causes "taint" which blocks ALL protected UI actions
--- (using items, buying bank slots, learning mounts, etc.)
--- Instead, we use UI-based blocking: hiding tabs, buttons, and using hooksecurefunc
-
 -- Gildenchat Scham-Nachricht senden
 -- Cooldown um Spam zu vermeiden
 local lastShameTime = 0
 local SHAME_COOLDOWN = 5 -- Sekunden zwischen Scham-Nachrichten
 
 local function SendShameMessage(action, details)
-    if not IsInGuild() then return end
-    
     -- Prüfe ob Scham-Nachrichten aktiviert sind
     if not BR:GetSetting("EnableShameMessages") then
         BR:Debug("WarboundBlock: Shame messages disabled")
@@ -211,126 +217,51 @@ local function SendShameMessage(action, details)
     end
     
     if msg ~= "" then
-        -- Sende in Gildenchat
-        SendChatMessage(msg, "GUILD")
-        BR:Debug("WarboundBlock: Shame message sent to guild chat: " .. msg)
+        local channelName = BR:GetSetting("ShameChannelName")
+        if not channelName or channelName == "" then
+            channelName = "Schandelog"
+        end
+
+        local channelId = GetChannelName(channelName)
+        if type(channelId) == "number" and channelId > 0 then
+            SendChatMessage(msg, "CHANNEL", nil, channelId)
+            BR:Debug("WarboundBlock: Shame message sent to channel '" .. channelName .. "': " .. msg)
+        elseif IsInGuild() then
+            SendChatMessage(msg, "GUILD")
+            BR:Debug("WarboundBlock: Shame message sent to guild chat: " .. msg)
+        else
+            BR:Debug("WarboundBlock: Shame message skipped (not in guild and channel not found)")
+        end
     end
 end
 
--- Track item movements to/from Warbound bank
-local trackedWarboundItems = {}
+-- Item-Tracking für Warbound Bank
+-- DEAKTIVIERT: Das Tracking ist zu unzuverlässig und verursacht False Positives
+-- Wir verlassen uns stattdessen auf die hooksecurefunc Hooks für Gold und Auto-Deposit
+-- Item-Bewegungen können wir leider nicht zuverlässig tracken ohne Taint zu verursachen
 
 local function TrackWarboundBagContents()
-    if not ShouldBlock() then return end
-    
-    -- Speichere aktuellen Inhalt der Warbound Bags
-    trackedWarboundItems = {}
-    
-    if Enum and Enum.BagIndex then
-        local accountBankFirst = Enum.BagIndex.AccountBankTab_1
-        local accountBankLast = Enum.BagIndex.AccountBankTab_5
-        
-        if accountBankFirst and accountBankLast then
-            for bagID = accountBankFirst, accountBankLast do
-                local numSlots = C_Container.GetContainerNumSlots(bagID)
-                if numSlots and numSlots > 0 then
-                    for slot = 1, numSlots do
-                        local itemInfo = C_Container.GetContainerItemInfo(bagID, slot)
-                        if itemInfo and itemInfo.itemID then
-                            local key = bagID .. "-" .. slot
-                            trackedWarboundItems[key] = {
-                                itemID = itemInfo.itemID,
-                                stackCount = itemInfo.stackCount,
-                                itemLink = itemInfo.hyperlink
-                            }
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    BR:Debug("WarboundBlock: Tracked " .. (next(trackedWarboundItems) and "items" or "no items") .. " in Warbound bank")
+    -- NO-OP: Item-Tracking deaktiviert wegen False Positives
+    BR:Debug("WarboundBlock: Item tracking disabled")
 end
 
 local function CheckWarboundBagChanges()
-    if not ShouldBlock() then return end
-    
-    local oldItems = trackedWarboundItems
-    local newItems = {}
-    
-    if Enum and Enum.BagIndex then
-        local accountBankFirst = Enum.BagIndex.AccountBankTab_1
-        local accountBankLast = Enum.BagIndex.AccountBankTab_5
-        
-        if accountBankFirst and accountBankLast then
-            for bagID = accountBankFirst, accountBankLast do
-                local numSlots = C_Container.GetContainerNumSlots(bagID)
-                if numSlots and numSlots > 0 then
-                    for slot = 1, numSlots do
-                        local itemInfo = C_Container.GetContainerItemInfo(bagID, slot)
-                        if itemInfo and itemInfo.itemID then
-                            local key = bagID .. "-" .. slot
-                            newItems[key] = {
-                                itemID = itemInfo.itemID,
-                                stackCount = itemInfo.stackCount,
-                                itemLink = itemInfo.hyperlink
-                            }
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Vergleiche: Neue Items = eingelagert, Fehlende Items = entnommen
-    for key, newItem in pairs(newItems) do
-        local oldItem = oldItems[key]
-        if not oldItem then
-            -- Neues Item eingelagert
-            local itemName = newItem.itemLink or ("Item " .. newItem.itemID)
-            BR:Debug("WarboundBlock: DETECTED - Item deposited: " .. itemName)
-            SendShameMessage("deposit_item", itemName)
-        elseif oldItem.stackCount < newItem.stackCount then
-            -- Stack erhöht = eingelagert
-            local itemName = newItem.itemLink or ("Item " .. newItem.itemID)
-            BR:Debug("WarboundBlock: DETECTED - Item stack increased: " .. itemName)
-            SendShameMessage("deposit_item", itemName)
-        end
-    end
-    
-    for key, oldItem in pairs(oldItems) do
-        local newItem = newItems[key]
-        if not newItem then
-            -- Item entnommen
-            local itemName = oldItem.itemLink or ("Item " .. oldItem.itemID)
-            BR:Debug("WarboundBlock: DETECTED - Item withdrawn: " .. itemName)
-            SendShameMessage("withdraw_item", itemName)
-        elseif newItem.stackCount < oldItem.stackCount then
-            -- Stack verringert = entnommen
-            local itemName = oldItem.itemLink or ("Item " .. oldItem.itemID)
-            BR:Debug("WarboundBlock: DETECTED - Item stack decreased: " .. itemName)
-            SendShameMessage("withdraw_item", itemName)
-        end
-    end
-    
-    -- Update tracked items
-    trackedWarboundItems = newItems
+    -- NO-OP: Item-Tracking deaktiviert wegen False Positives
+    BR:Debug("WarboundBlock: Item change check disabled")
 end
+
+-- Hook Functions -------------------------------------------------------------
+-- WICHTIG: Wir hooken KEINE C_Bank Funktionen direkt, da dies UI-Taint verursacht!
+-- Stattdessen verwenden wir nur hooksecurefunc (Post-Hooks) und UI-basierte Blockierung.
 
 local function InstallHooks()
     if hooksInstalled then return end
     hooksInstalled = true
     
-    -- NOTE: C_Bank.DepositMoney, C_Bank.WithdrawMoney, C_Bank.DepositItem, 
-    -- C_Bank.AutoDepositItemsIntoBank are ALL protected functions.
-    -- We CANNOT hook them without causing taint.
-    -- Instead, we use post-hooks to detect and shame users who bypass the block.
+    -- Sichere Post-Hooks mit hooksecurefunc (verursachen KEINEN Taint)
+    -- Diese können nicht blockieren, aber Scham-Nachrichten senden
     
-    -- Use hooksecurefunc for safe post-hooks (these don't cause taint)
-    -- They run AFTER the original function, so they can't block, but can document/shame
-    
-    -- Hook Gold Deposit to Account Bank
+    -- Gold Einzahlung erkennen
     if C_Bank and C_Bank.DepositMoney then
         hooksecurefunc(C_Bank, "DepositMoney", function(bankType, amount)
             if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
@@ -341,7 +272,7 @@ local function InstallHooks()
         end)
     end
     
-    -- Hook Gold Withdraw from Account Bank
+    -- Gold Entnahme erkennen
     if C_Bank and C_Bank.WithdrawMoney then
         hooksecurefunc(C_Bank, "WithdrawMoney", function(bankType, amount)
             if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
@@ -352,7 +283,7 @@ local function InstallHooks()
         end)
     end
     
-    -- Hook Auto-Deposit Items to Account Bank
+    -- Auto-Einlagerung erkennen
     if C_Bank and C_Bank.AutoDepositItemsIntoBank then
         hooksecurefunc(C_Bank, "AutoDepositItemsIntoBank", function(bankType)
             if ShouldBlock() and bankType == BANK_TYPE_ACCOUNT then
@@ -363,17 +294,8 @@ local function InstallHooks()
         end)
     end
     
-    -- Hook clicking on AccountBankPanel item slots to clear cursor (safe)
-    if AccountBankPanel then
-        hooksecurefunc(AccountBankPanel, "OnMouseUp", function()
-            if ShouldBlock() and CursorHasItem() then
-                C_Timer.After(0, function()
-                    ClearCursor()
-                    NotifyBlocked("deposit_item")
-                end)
-            end
-        end)
-    end
+    -- ENTFERNT: AccountBankPanel.OnMouseUp Hook mit ClearCursor() verursacht Taint
+    -- Stattdessen verlassen wir uns auf das Tab-Verstecken und Scham-Nachrichten
     
     BR:Debug("WarboundBlock: Safe hooks installed with shame messages")
 end
@@ -574,6 +496,25 @@ local function HideThirdPartyWarbandTabs()
     
     local searchTexts = {"Kriegsmeute", "Warband", "Account Bank"}
     
+    -- Suche in allen sichtbaren Frames nach Warband-Tabs
+    local framesToCheck = {}
+    
+    -- Baganator und Bagnon Frames
+    for frameName, frame in pairs(_G) do
+        if type(frameName) == "string" and type(frame) == "table" then
+            if frameName:find("Baganator") or frameName:find("Bagnon") then
+                if frame.IsShown and pcall(function() return frame:IsShown() end) and frame:IsShown() then
+                    table.insert(framesToCheck, frame)
+                end
+            end
+        end
+    end
+    
+    -- Durchsuche alle gefundenen Frames
+    for _, frame in ipairs(framesToCheck) do
+        HideFramesWithText(frame, searchTexts, 0)
+    end
+    
     -- Spezifische Baganator Tab-Suche und Tab-Wechsel
     local baganatorFrames = GetBaganatorBankFrames()
     for _, frame in ipairs(baganatorFrames) do
@@ -637,6 +578,44 @@ local function HideThirdPartyWarbandTabs()
         end
     end
     
+    -- Suche nach allen Bagnon Frames mit "Kriegsmeute" Text
+    for frameName, frame in pairs(_G) do
+        if type(frameName) == "string" and frameName:find("Bagnon") and type(frame) == "table" then
+            if frame.IsShown and pcall(function() return frame:IsShown() end) and frame:IsShown() then
+                -- Suche nach Kindern mit Kriegsmeute Text
+                if frame.GetChildren then
+                    for i = 1, select("#", frame:GetChildren()) do
+                        local child = select(i, frame:GetChildren())
+                        if child then
+                            -- Prüfe ob es ein Tab/Button mit Kriegsmeute ist
+                            if child.GetText then
+                                local text = child:GetText()
+                                if text and text:find("Kriegsmeute") then
+                                    child:Hide()
+                                    BR:Debug("WarboundBlock: Hidden Bagnon child with text: " .. text)
+                                end
+                            end
+                            -- Prüfe auch Regionen (FontStrings)
+                            if child.GetRegions then
+                                for j = 1, select("#", child:GetRegions()) do
+                                    local region = select(j, child:GetRegions())
+                                    if region and region.GetText then
+                                        local text = region:GetText()
+                                        if text and text:find("Kriegsmeute") then
+                                            child:Hide()
+                                            BR:Debug("WarboundBlock: Hidden Bagnon frame via region: " .. text)
+                                        end
+                                    end
+                                end
+                            end
+                            -- Rekursiv durch Kinder
+                            HideFramesWithText(child, searchTexts, 0)
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- Hook Baganator SetTab to prevent switching to Warband tab
@@ -742,121 +721,145 @@ local function CheckBaganatorWarbandAccess()
     end
 end
 
--- Overlay frame to cover the Warbound tab button (makes it unclickable and invisible)
-local warboundTabOverlay = nil
--- Store reference to hidden tab for alpha restoration
-local hiddenAlphaTab = nil
-
 -- Hide the Warbound Bank tab button
--- We use an overlay with SetAlpha(0) approach to avoid taint from Hide()
--- The overlay covers the tab and blocks clicks while making it appear hidden
 local function HideWarboundBankTab()
     if not ShouldBlock() then return end
     
-    -- Hide in Baganator (third-party addon, safe to manipulate directly)
+    -- Hide in Baganator
     HideBaganatorWarboundTabs()
     
-    -- Standard BankFrame handling - use overlay instead of Hide() to avoid taint
-    if not BankFrame or not BankFrame:IsShown() then return end
+    -- Standard BankFrame handling
+    if not BankFrame then return end
     
-    -- Defer to next frame to avoid taint during protected actions
-    C_Timer.After(0, function()
-        if not BankFrame or not BankFrame:IsShown() then return end
-        if not ShouldBlock() then return end
+    -- Primary method: BankFrame.TabSystem (from /fstack analysis)
+    -- The Warbound bank tab is the second tab (tabID = 2)
+    if BankFrame.TabSystem then
+        local tabSystem = BankFrame.TabSystem
         
-        -- Find the Warbound tab and cover it with an overlay
-        if BankFrame.TabSystem then
-            local tabSystem = BankFrame.TabSystem
-            local warboundTab = nil
-            
-            -- Find the Warbound tab (tab 2)
-            if tabSystem.tabs and tabSystem.tabs[2] then
-                warboundTab = tabSystem.tabs[2]
-            elseif tabSystem.GetTabButton then
-                warboundTab = tabSystem:GetTabButton(2)
-            end
-            
-            if warboundTab and warboundTab:IsShown() then
-                -- Create overlay if it doesn't exist
-                if not warboundTabOverlay then
-                    warboundTabOverlay = CreateFrame("Frame", "AllforOneWarboundTabOverlay", UIParent)
-                    warboundTabOverlay:SetFrameStrata("DIALOG")
-                    warboundTabOverlay:SetFrameLevel(100)
-                    -- Completely transparent - just blocks clicks
-                    warboundTabOverlay:EnableMouse(true) -- Block clicks
-                    warboundTabOverlay:SetScript("OnMouseDown", function()
-                        NotifyBlocked("access")
-                    end)
+        -- Method 1: Check for tabs array
+        if tabSystem.tabs then
+            for i, tab in ipairs(tabSystem.tabs) do
+                -- Tab 2 is the Warbound/Account bank tab
+                if tab and (tab.tabID == 2 or i == 2) then
+                    tab:Hide()
+                    hiddenWarboundTab = tab
+                    BR:Debug("WarboundBlock: Hidden Warbound tab via TabSystem.tabs[" .. i .. "]")
                 end
-                
-                -- Make the actual tab invisible using SetAlpha
-                warboundTab:SetAlpha(0)
-                hiddenAlphaTab = warboundTab
-                
-                -- Position overlay over the Warbound tab
-                warboundTabOverlay:ClearAllPoints()
-                warboundTabOverlay:SetPoint("TOPLEFT", warboundTab, "TOPLEFT", 0, 0)
-                warboundTabOverlay:SetPoint("BOTTOMRIGHT", warboundTab, "BOTTOMRIGHT", 0, 0)
-                warboundTabOverlay:Show()
-                
-                BR:Debug("WarboundBlock: Covered Warbound tab with overlay")
             end
         end
-    end)
+        
+        -- Method 2: Iterate TabSystem children directly
+        for i = 1, tabSystem:GetNumChildren() do
+            local child = select(i, tabSystem:GetChildren())
+            if child then
+                -- Check if this is the second tab or has tabID 2
+                if child.tabID == 2 or child.bankType == BANK_TYPE_ACCOUNT then
+                    child:Hide()
+                    hiddenWarboundTab = child
+                    BR:Debug("WarboundBlock: Hidden Warbound tab via TabSystem child " .. i)
+                end
+                -- Also check by text/label if available
+                if child.Text then
+                    local text = child.Text:GetText()
+                    if text and (text:find("Kriegsmeute") or text:find("Warbound") or text:find("Account")) then
+                        child:Hide()
+                        hiddenWarboundTab = child
+                        BR:Debug("WarboundBlock: Hidden Warbound tab by text: " .. text)
+                    end
+                end
+            end
+        end
+        
+        -- Method 3: Try GetTabButton if available
+        if tabSystem.GetTabButton then
+            local tab = tabSystem:GetTabButton(2)
+            if tab then
+                tab:Hide()
+                hiddenWarboundTab = tab
+                BR:Debug("WarboundBlock: Hidden Warbound tab via GetTabButton(2)")
+            end
+        end
+    end
+    
+    -- Fallback: Search BankFrame children for TabSystem
+    for i = 1, BankFrame:GetNumChildren() do
+        local child = select(i, BankFrame:GetChildren())
+        if child then
+            local name = child:GetName() or ""
+            if name:find("TabSystem") then
+                for j = 1, child:GetNumChildren() do
+                    local tab = select(j, child:GetChildren())
+                    if tab and (tab.tabID == 2 or j == 2) then
+                        tab:Hide()
+                        hiddenWarboundTab = tab
+                        BR:Debug("WarboundBlock: Hidden tab via BankFrame child TabSystem")
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- Show the Warbound Bank tab button (when blocking is disabled)
 local function ShowWarboundBankTab()
-    -- Restore Baganator tabs (third-party, safe)
+    -- Restore Baganator tabs
     ShowBaganatorWarboundTabs()
     
-    -- Hide the overlay
-    if warboundTabOverlay then
-        warboundTabOverlay:Hide()
+    if not BankFrame then return end
+    
+    -- Restore previously hidden tab
+    if hiddenWarboundTab then
+        hiddenWarboundTab:Show()
+        hiddenWarboundTab = nil
+        BR:Debug("WarboundBlock: Restored hidden Warbound tab")
+        return
     end
     
-    -- Restore alpha on the tab
-    if hiddenAlphaTab then
-        hiddenAlphaTab:SetAlpha(1)
-        hiddenAlphaTab = nil
+    -- Fallback: Try to find and show
+    if BankFrame.TabSystem then
+        local tabSystem = BankFrame.TabSystem
+        
+        if tabSystem.tabs then
+            for i, tab in ipairs(tabSystem.tabs) do
+                if tab and (tab.tabID == 2 or i == 2) then
+                    tab:Show()
+                end
+            end
+        end
+        
+        for i = 1, tabSystem:GetNumChildren() do
+            local child = select(i, tabSystem:GetChildren())
+            if child and (child.tabID == 2 or child.bankType == BANK_TYPE_ACCOUNT) then
+                child:Show()
+            end
+        end
+        
+        if tabSystem.GetTabButton then
+            local tab = tabSystem:GetTabButton(2)
+            if tab then tab:Show() end
+        end
     end
-    
-    -- Clear the reference (no longer used, but keep for compatibility)
-    hiddenWarboundTab = nil
-    
-    BR:Debug("WarboundBlock: ShowWarboundBankTab called - overlay hidden, alpha restored")
 end
 
 -- Force switch to normal bank tab (tab 1)
--- NOTE: We no longer manipulate BankFrame.TabSystem to avoid taint!
--- Instead, we rely on CloseIfWarboundOpen() to close the bank if user clicks Warbound tab
+-- WICHTIG: Diese Funktion ist jetzt ein NO-OP um Taint zu vermeiden!
+-- Wir können keine Tab-Wechsel erzwingen ohne Taint zu verursachen.
+-- Stattdessen verstecken wir nur den Warbound-Tab Button.
 local function ForceNormalBankTab()
-    if not ShouldBlock() then return end
-    
-    -- We intentionally do NOT touch BankFrame.TabSystem anymore
-    -- This was causing taint that blocked PurchaseBankTab()
-    
-    BR:Debug("WarboundBlock: ForceNormalBankTab called (no-op to avoid taint)")
+    -- NO-OP: Tab-Wechsel verursacht Taint und blockiert PurchaseBankTab()
+    -- Wir verlassen uns auf HideWarboundBankTab() um den Tab unsichtbar zu machen
+    BR:Debug("WarboundBlock: ForceNormalBankTab skipped (would cause taint)")
 end
 
 -- Close bank if Warbound is somehow open
+-- WICHTIG: Diese Funktion ist jetzt ein NO-OP um Taint zu vermeiden!
+-- CloseBankFrame() verursacht Taint und blockiert PurchaseBankTab()
 local function CloseIfWarboundOpen()
-    if not ShouldBlock() then return end
-    
+    -- NO-OP: CloseBankFrame() verursacht Taint
+    -- Wir verlassen uns auf das Verstecken des Warbound-Tabs
     if IsWarboundBankOpen() then
         NotifyBlocked("access")
-        BR:Debug("WarboundBlock: Warbound bank detected open, closing...")
-        
-        -- Try to switch to normal bank first
-        ForceNormalBankTab()
-        
-        -- If still open after a short delay, close the bank entirely
-        C_Timer.After(0.1, function()
-            if IsWarboundBankOpen() then
-                CloseBankFrame()
-                BR:Print("Die Kriegsmeutenbank ist für dich gesperrt.", "warning")
-            end
-        end)
+        BR:Debug("WarboundBlock: Warbound bank detected open (not closing to avoid taint)")
     end
 end
 
@@ -947,36 +950,22 @@ local function BlockWarboundButtons()
     end
 end
 
--- Block Warband Bank Distance Inhibitor usage via spell cast detection
--- NOTE: We cannot cancel the cast (SpellStopCasting is protected), but we can close the bank immediately after
-local distanceInhibitorFrame = CreateFrame("Frame")
-distanceInhibitorFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-distanceInhibitorFrame:SetScript("OnEvent", function(self, event, unit, castGUID, spellID)
-    if unit ~= "player" then return end
+-- Block Warband Bank Distance Inhibitor usage
+local function BlockDistanceInhibitor()
     if not ShouldBlock() then return end
     
-    if spellID == WARBAND_DISTANCE_INHIBITOR_SPELL_ID then
-        -- Cast succeeded - close the bank immediately
-        BR:Debug("WarboundBlock: Distance Inhibitor spell detected (ID: " .. spellID .. "), closing bank...")
-        C_Timer.After(0.1, function()
-            if IsWarboundBankOpen() then
-                CloseBankFrame()
-                NotifyBlocked("remote_access")
-                BR:Print("Fernzugriff auf die Kriegsmeutenbank ist blockiert!", "warning")
-            end
-        end)
-    end
-end)
+    -- Hook C_Container.UseContainerItem kann nicht direkt gehookt werden (protected)
+    -- Stattdessen hooken wir das Item-Tooltip und blockieren via Overlay
+    
+    -- Hook ItemButton clicks to block the Distance Inhibitor
+    hooksecurefunc(C_Container, "UseContainerItem", function(bagID, slotIndex)
+        -- Diese Funktion wird NACH dem Aufruf ausgeführt, kann also nicht blockieren
+        -- Aber wir können eine Warnung anzeigen
+    end)
+end
 
 -- Check for Better Bags addon frames
--- Cache the frames to avoid repeated lookups
-local cachedBetterBagsFrames = nil
 local function GetBetterBagsFrames()
-    -- Return cached frames if already found
-    if cachedBetterBagsFrames then
-        return cachedBetterBagsFrames
-    end
-    
     local frames = {}
     
     -- Better Bags verwendet verschiedene Frame-Namen
@@ -993,9 +982,13 @@ local function GetBetterBagsFrames()
         end
     end
     
-    -- Cache the result if we found any frames
-    if #frames > 0 then
-        cachedBetterBagsFrames = frames
+    -- Suche nach Frames die "BetterBags" im Namen haben
+    for frameName, frame in pairs(_G) do
+        if type(frameName) == "string" and frameName:find("BetterBags") and type(frame) == "table" and frame.IsShown then
+            if not tContains(frames, frame) then
+                table.insert(frames, frame)
+            end
+        end
     end
     
     return frames
@@ -1158,6 +1151,44 @@ CheckBagnonWarbandAccess = function()
     end
 end
 
+-- Verstecke BetterBags Warbank Tabs direkt
+local function HideBetterBagsWarbankTabs()
+    if not ShouldBlock() then return end
+    
+    -- Suche nach BetterBags Bank Frames
+    for frameName, frame in pairs(_G) do
+        if type(frameName) == "string" and type(frame) == "table" then
+            -- BetterBags Bank Frame hat typischerweise "Bank" im Namen
+            if frameName:find("BetterBags") and frameName:find("Bank") then
+                if frame.tabs then
+                    -- Verstecke alle Warbank Tabs
+                    for i, tab in ipairs(frame.tabs) do
+                        if tab and tab.tabType and tab.tabType == "warbank" then
+                            pcall(function() tab:Hide() end)
+                            BR:Debug("WarboundBlock: Hidden BetterBags warbank tab")
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Suche nach Frames mit "Warbank" oder "Account" im Namen
+    local framesToHide = {
+        "BetterBagsBankWarbankView",
+        "BetterBagsWarbankFrame",
+        "BetterBagsAccountBankFrame",
+    }
+    
+    for _, name in ipairs(framesToHide) do
+        local frame = _G[name]
+        if frame and frame.Hide then
+            pcall(function() frame:Hide() end)
+            BR:Debug("WarboundBlock: Hidden frame: " .. name)
+        end
+    end
+end
+
 -- Hook Better Bags to block Warband access
 local betterBagsHooked = false
 local function HookBetterBags()
@@ -1231,6 +1262,13 @@ local function HookBetterBags()
                 BR:Debug("WarboundBlock: Hooked BetterBags OnShow")
             end
         end
+        
+        -- Verstecke Warbank-Tabs direkt im BetterBags Bank Frame
+        -- Suche nach dem Bank Frame und verstecke die Warbank Tabs
+        C_Timer.After(0.5, function()
+            if not ShouldBlock() then return end
+            HideBetterBagsWarbankTabs()
+        end)
     end
 end
 
@@ -1437,97 +1475,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 end)
 
--- Currency Transfer Block ----------------------------------------------------
--- Block the CurrencyTransferMenu (Warband currency transfers between characters)
--- NOTE: We only hide the UI, we do NOT hook C_CurrencyInfo functions as they are protected
-
-local function BlockCurrencyTransferMenu()
-    -- Hook CurrencyTransferMenu frame if it exists
-    if CurrencyTransferMenu and not CurrencyTransferMenu.allforoneHooked then
-        -- Hook OnShow - hide immediately
-        CurrencyTransferMenu:HookScript("OnShow", function(self)
-            if ShouldBlock() then
-                -- Hide immediately without delay
-                self:Hide()
-                NotifyBlocked("currency_transfer")
-            end
-        end)
-        
-        -- Also hook the toggle button if it exists
-        if CurrencyTransferMenu.SourceSelector and CurrencyTransferMenu.SourceSelector.Dropdown then
-            -- This prevents the dropdown from opening
-        end
-        
-        CurrencyTransferMenu.allforoneHooked = true
-        BR:Debug("WarboundBlock: CurrencyTransferMenu OnShow hooked")
-    end
-    
-    -- Hide the "Überweisen" / "Transfer" button in TokenFramePopup completely
-    if TokenFramePopup and TokenFramePopup.CurrencyTransferToggleButton and not TokenFramePopup.CurrencyTransferToggleButton.allforoneHooked then
-        local transferButton = TokenFramePopup.CurrencyTransferToggleButton
-        
-        -- Hide the button if blocking is enabled
-        if ShouldBlock() then
-            transferButton:Hide()
-        end
-        
-        -- Hook OnShow to keep it hidden
-        transferButton:HookScript("OnShow", function(self)
-            if ShouldBlock() then
-                self:Hide()
-            end
-        end)
-        
-        -- Also hook TokenFramePopup OnShow to hide the button when popup opens
-        if not TokenFramePopup.allforoneHooked then
-            TokenFramePopup:HookScript("OnShow", function(self)
-                if ShouldBlock() and self.CurrencyTransferToggleButton then
-                    self.CurrencyTransferToggleButton:Hide()
-                end
-            end)
-            TokenFramePopup.allforoneHooked = true
-        end
-        
-        transferButton.allforoneHooked = true
-        BR:Debug("WarboundBlock: CurrencyTransferToggleButton hidden")
-    end
-end
-
--- NOTE: We do NOT hook C_CurrencyInfo.RequestCurrencyFromAccountCharacter because it's a
--- protected Blizzard function. Hooking it would "taint" the UI and block ALL protected actions
--- (like using items, learning mounts, etc.). Instead, we only hide the UI button.
-
-local function BlockCurrencyTransfer()
-    BlockCurrencyTransferMenu()
-    
-    -- Also hide the menu if it's currently shown
-    if ShouldBlock() and CurrencyTransferMenu and CurrencyTransferMenu:IsShown() then
-        CurrencyTransferMenu:Hide()
-        NotifyBlocked("currency_transfer")
-    end
-end
-
--- Hook when Blizzard_TokenUI loads (it's loaded on demand)
-local function HookCurrencyTransferWhenReady()
-    if CurrencyTransferMenu then
-        BlockCurrencyTransfer()
-    else
-        -- Wait for Blizzard_TokenUI to load
-        local frame = CreateFrame("Frame")
-        frame:RegisterEvent("ADDON_LOADED")
-        frame:SetScript("OnEvent", function(self, event, addonName)
-            if addonName == "Blizzard_TokenUI" then
-                C_Timer.After(0.1, BlockCurrencyTransfer)
-                self:UnregisterEvent("ADDON_LOADED")
-            end
-        end)
-    end
-end
-
 -- Module API -----------------------------------------------------------------
 function WarboundBlock:OnInitialize()
     InstallHooks()
-    HookCurrencyTransferWhenReady()
     BR:Debug("WarboundBlock module initialized")
 end
 

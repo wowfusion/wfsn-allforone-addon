@@ -358,6 +358,7 @@ function BR:InitializeDefaults()
         BlockCraftingOrders = true,
         BlockWarbound = true,
         EnableShameMessages = true, -- Gildenchat Scham-Nachrichten bei Warbound-Nutzung
+        ShameChannelName = "Schandelog",
         BlockDragonFlying = true, -- Himmelsreiten bis Level 80 blockieren
         MailBlockMode = "selective", -- "full" or "selective"
         DebugMode = false,
@@ -1155,6 +1156,10 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
+
+        C_Timer.After(5, function()
+            BR:EnsureShameChannelJoined()
+        end)
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
@@ -1251,6 +1256,29 @@ SlashCmdList["ALLFORONE"] = function(msg)
         BR:Print("Reset-Befehl für " .. arg .. " gesendet.", "info")
     elseif cmd == "hilfe" or cmd == "help" then
         BR:Print("|cFFFFCC00=== All for One Befehle ===|r")
+        BR:Print("|cFF00FF00Addon:|r")
+        BR:Print("  /afo - Einstellungen öffnen")
+        BR:Print("  /afo status - Status anzeigen")
+        BR:Print("  /afo debug - Debug-Modus umschalten")
+        if BR:IsGuildOfficer() then
+            BR:Print("|cFF00FF00Offizier:|r")
+            BR:Print("  /afo admin - Offizier-Übersicht öffnen")
+            BR:Print("  /afo ping - Gildenmitglieder pingen")
+            BR:Print("  /afo reset <Name> - Warnung zurücksetzen")
+        end
+        BR:Print("|cFF00FF00QoL Shortcuts:|r")
+        BR:Print("  /rl - UI neu laden")
+        BR:Print("  /rc - Ready Check")
+        BR:Print("  /inv <Name> - Spieler einladen")
+        BR:Print("  /pt [Sek] - Pull Timer (Standard: 10)")
+        BR:Print("  /pt stop - Pull Timer abbrechen")
+    else
+        BR:Print("Unbekannter Befehl. /afo hilfe für alle Befehle.")
+    end
+end
+
+BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
+BR:Print("Für die Gilde, für den Zusammenhalt – bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")
         BR:Print("|cFF00FF00Addon:|r")
         BR:Print("  /afo - Einstellungen öffnen")
         BR:Print("  /afo status - Status anzeigen")

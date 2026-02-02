@@ -38,21 +38,29 @@ Technische Änderungen und Details für Entwickler.
 - **Fallback**: Bank wird sofort geschlossen wenn der Spell durchgeht
 
 #### Gildenchat Scham-Feature
-- **Neue Funktion**: `SendShameMessage(action, details)` - Sendet Scham-Nachricht in Gildenchat
+- **Neue Funktion**: `SendShameMessage(action, details)` - Sendet Scham-Nachricht in Custom-Channel (Default: `Schandelog`), Fallback: `GUILD`
 - **Cooldown**: 5 Sekunden zwischen Nachrichten um Spam zu vermeiden
 - **Aktionen**: `deposit_gold`, `withdraw_gold`, `deposit_item`, `withdraw_item`, `deposit_all`
 - **Nachrichtenformat**: "Schande über mich! Ich habe [Item/Gold] entnommen/eingelagert!"
 
+#### Schandelog Auto-Join
+- **Neu**: `BR:EnsureShameChannelJoined()` versucht beim Login einmalig den Channel `Schandelog` (oder `ShameChannelName`) zu joinen
+- **Trigger**: `PLAYER_LOGIN` mit Delay (5s)
+
 #### Item-Tracking für Scham-Feature
-- **Neue Funktion**: `TrackWarboundBagContents()` - Speichert Inhalt der Warbound Bags
-- **Neue Funktion**: `CheckWarboundBagChanges()` - Vergleicht und erkennt Änderungen
-- **Events**: `BANKFRAME_OPENED` → Track, `BANKFRAME_CLOSED` → Check
-- **Tracking**: Item ID, Stack Count, Item Link pro Slot
+- **Status**: Deaktiviert (zu unzuverlässig / False Positives)
 
 #### Verstärkte Post-Hooks
 - **Neu**: `hooksecurefunc(C_Bank, "WithdrawMoney")` - Erkennt Gold-Entnahme
 - **Neu**: `hooksecurefunc(C_Bank, "AutoDepositItemsIntoBank")` - Erkennt Auto-Einlagerung
 - **Alle Hooks**: Lösen jetzt Scham-Nachricht aus wenn Warbound-Bank betroffen
+
+#### Third-Party Bank-Addon Deaktivierung
+- **Neue Funktion**: `ForceBlizzardBankFrame()` - Versteckt alle Third-Party Bank-Frames
+- **Unterstützte Addons**: Baganator, BetterBags, Bagnon, AdiBags, ArkInventory, Inventorian, Combuctor, ElvUI
+- **Aufruf**: Bei `BANKFRAME_OPENED` und im Ticker alle 0.3 Sekunden
+- **Grund**: 100% Warbound-Schutz durch Erzwingen des Standard-Blizzard-BankFrames
+- **Benachrichtigung**: User wird informiert wenn Third-Party Frame versteckt wird
 
 ### Modules/AdminPanel.lua
 

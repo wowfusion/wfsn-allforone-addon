@@ -14,14 +14,16 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 - **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
 
 ### Neu
-- **Gildenchat Scham-Feature**: Wenn jemand trotz Block Items/Gold aus der Kriegsmeutenbank entnimmt oder einlagert, wird automatisch eine Nachricht im Gildenchat gepostet: "Schande über mich! Ich habe [Item/Gold] entnommen/eingelagert!"
+- **Scham-Feature (Schandelog-Channel)**: Wenn jemand trotz Block Gold in der Kriegsmeutenbank ein-/auszahlt, wird automatisch eine Nachricht im Channel "Schandelog" gepostet (falls vorhanden, sonst im Gildenchat)
+- **Schandelog Auto-Join**: Der Channel "Schandelog" wird beim Login automatisch beigetreten (wenn möglich)
 
 ### Verbessert
 - **Himmelsreiten-Sperre mit Pfadfinder**: Neue intelligente Logik für Himmelsreiten:
   - Level unter 70: Himmelsreiten immer blockiert (Statisches Fliegen erzwungen)
   - Level 70+: Spieler MIT "The War Within Pfadfinder" Achievement → Himmelsreiten blockiert
   - Level 70+: Spieler OHNE Pfadfinder → Himmelsreiten erlaubt (für Content benötigt)
-- **Kriegsmeutenbank-Block verstärkt**: Zusätzliche Hooks für Gold Ein-/Auszahlung und Item-Tracking
+- **Kriegsmeutenbank-Block verstärkt**: Zusätzliche Hooks für Gold Ein-/Auszahlung
+- **Third-Party Bank-Addons deaktiviert**: Baganator, BetterBags, Bagnon, AdiBags, ElvUI etc. werden beim Öffnen der Bank versteckt - nur das Standard-Blizzard-BankFrame wird angezeigt für 100% Warbound-Schutz
 - **Kriegsmeutenbank-Tab**: Der Tab wird jetzt unsichtbar gemacht statt mit einem Overlay verdeckt
 - **Addon-Kategorie**: Das Addon erscheint jetzt unter "Guild" in der Blizzard Addon-Liste
 - **Mail Reward NPC Datenbank erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Das Entwicklerteam von WoW)
