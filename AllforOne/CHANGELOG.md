@@ -7,11 +7,12 @@ Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 ### Behoben
 - **UI-Taint behoben**: Inventar-Interaktionen (Items benutzen, Reittiere erlernen, Bankfächer kaufen) wurden fälschlicherweise blockiert
 - **Performance-Problem behoben**: Massive Lag-Spikes beim Öffnen der Bank wurden behoben
-- **Disconnect-Warnung**: "Addon war deaktiviert" Meldung erscheint nicht mehr nach einem Disconnect
+- **Addon war Deaktiviert**: Meldung erscheint nicht mehr fälschlicherweise nach einem Disconnect
 - **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern
-- **Startgebiete**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren oder im Death Knight Startgebiet
-- **Tutorial-Insel**: Gruppensperre ist auf der Tutorial-Insel (Exiles Reach) deaktiviert
+- **Startgebiete**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (da kein Reset ohne Gilde möglich ist)
+- **Tutorial-Insel**: Im Abschluss-Dungeon wird man nicht mehr aus der Gruppe entfernt
 - **Post vom Kundensupport**: Mails vom Kundensupport werden nicht mehr fälschlicherweise blockiert
+- **Diverse kleinere fehler behoben** wie z.B. Lua Error in Dungeons usw.
 
 ### Neu
 - **Scham-Feature für Kriegsmeutenbank**: Automatische Gildenchat-Nachricht wenn jemand Gold oder Items ein-/auslagert
