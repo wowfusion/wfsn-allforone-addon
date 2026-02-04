@@ -11,6 +11,7 @@ local DragonFlyingBlock = {
     enabled = false,
     lastBlockTime = 0,
     wasMounted = false,
+    temporaryUnlock = false, -- Temporäre Freischaltung (bis zum nächsten Login)
 }
 
 -- Flight style buff IDs
@@ -27,6 +28,11 @@ local PATHFINDER_CHECK_LEVEL = 70
 -- Spieler MIT Pfadfinder können Statisches Fliegen nutzen -> Himmelsreiten blockiert
 -- Spieler OHNE Pfadfinder brauchen Himmelsreiten für Content -> erlaubt
 local TWW_PATHFINDER_ACHIEVEMENT_ID = 40231
+
+-- Pfadfinder-Ausnahme aktivieren/deaktivieren
+-- false = Ausnahme deaktiviert (Himmelsreiten wird unter Max-Level immer blockiert)
+-- true = Ausnahme aktiviert (Level 70+ ohne Pfadfinder dürfen Himmelsreiten)
+local ENABLE_PATHFINDER_EXCEPTION = false
 
 -- CVar für Flugstil (0 = Steady, 1 = Skyriding)
 local CVAR_FLIGHT_STYLE = "dynamicFlightMountedOption"
@@ -217,6 +223,12 @@ function DragonFlyingBlock:HasPathfinderAchievement()
 end
 
 function DragonFlyingBlock:ShouldBlock()
+    -- Temporäre Freischaltung durch Offizier (nur bis zum nächsten Login)
+    if self.temporaryUnlock then
+        BR:Debug("DragonFlyingBlock:ShouldBlock - Temporarily unlocked by officer")
+        return false
+    end
+    
     -- Basic checks
     if not self.enabled then 
         BR:Debug("DragonFlyingBlock:ShouldBlock - Module disabled")
@@ -244,16 +256,25 @@ function DragonFlyingBlock:ShouldBlock()
         return false
     end
     
-    -- NEUE LOGIK: Level-basierte Pfadfinder-Prüfung
-    -- Level < 70: Immer blockieren (Statisches Fliegen erzwingen)
-    -- Level 70+: Nur blockieren wenn Spieler Pfadfinder HAT (kann dann Statisch fliegen)
-    --            Ohne Pfadfinder: Himmelsreiten erlauben (braucht es für Content)
+    -- Pfadfinder-Ausnahme Logik
+    -- Wenn ENABLE_PATHFINDER_EXCEPTION = false: Immer blockieren unter Max-Level
+    -- Wenn ENABLE_PATHFINDER_EXCEPTION = true: Level 70+ ohne Pfadfinder dürfen Himmelsreiten
     
+    if not ENABLE_PATHFINDER_EXCEPTION then
+        -- Ausnahme deaktiviert: Einfach blockieren wenn Skyriding aktiv
+        BR:Debug("DragonFlyingBlock:ShouldBlock - Pathfinder exception disabled, checking Skyriding")
+        local skyridingEnabled = self:IsSkyridingEnabled()
+        if skyridingEnabled then
+            return true
+        end
+        return false
+    end
+    
+    -- Ab hier: Pfadfinder-Ausnahme ist aktiviert
     if playerLevel < PATHFINDER_CHECK_LEVEL then
         -- Unter Level 70: Immer Himmelsreiten blockieren
         BR:Debug("DragonFlyingBlock:ShouldBlock - Level " .. playerLevel .. " < " .. PATHFINDER_CHECK_LEVEL .. " - blockieren")
         
-        -- Nur blockieren wenn Skyriding aktiv ist
         local skyridingEnabled = self:IsSkyridingEnabled()
         if skyridingEnabled then
             return true
@@ -610,6 +631,23 @@ function DragonFlyingBlock:SetupEvents()
     -- Initialize mount state
     self.wasMounted = IsMounted()
     BR:Debug("DragonFlyingBlock: Events registered, initial mount state: " .. tostring(self.wasMounted))
+end
+
+-- Temporäre Freischaltung setzen (nur bis zum nächsten Login)
+function DragonFlyingBlock:SetTemporaryUnlock(enabled, officerName)
+    self.temporaryUnlock = enabled
+    if enabled then
+        BR:Print("Himmelsreiten wurde von " .. officerName .. " temporär freigeschaltet.", "info")
+        BR:Print("Die Freischaltung gilt nur bis zum nächsten Login.", "info")
+    else
+        BR:Print("Temporäre Himmelsreiten-Freischaltung wurde deaktiviert.", "info")
+    end
+    BR:Debug("DragonFlyingBlock: Temporary unlock set to " .. tostring(enabled) .. " by " .. officerName)
+end
+
+-- Prüft ob temporäre Freischaltung aktiv ist
+function DragonFlyingBlock:IsTemporarilyUnlocked()
+    return self.temporaryUnlock
 end
 
 BR:RegisterModule("DragonFlyingBlock", DragonFlyingBlock)

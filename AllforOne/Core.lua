@@ -820,7 +820,109 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
         if BR.Modules.GuildMap and BR.Modules.GuildMap.HandlePositionMessage then
             BR.Modules.GuildMap:HandlePositionMessage(message, sender)
         end
+    elseif msgType == "REQUEST_SECURITY_INFO" then
+        -- Officer requests security info from a player
+        local targetPlayer = data1
+        local myName = UnitName("player")
+        if targetPlayer and targetPlayer:lower() == myName:lower() then
+            -- Request is for me - send my security data
+            self:SendSecurityInfo(sender)
+        end
+    elseif msgType == "SECURITY_INFO" then
+        -- Received security info from a player
+        self:DisplaySecurityInfo(message, sender)
+    elseif msgType == "UNLOCK_FLYING" then
+        -- Officer unlocks flying for a player temporarily
+        local targetPlayer = data1
+        local myName = UnitName("player")
+        if targetPlayer and targetPlayer:lower() == myName:lower() then
+            -- This unlock is for me
+            if BR.Modules.DragonFlyingBlock then
+                BR.Modules.DragonFlyingBlock:SetTemporaryUnlock(true, sender)
+            end
+        end
+    elseif msgType == "LOCK_FLYING" then
+        -- Officer locks flying again for a player
+        local targetPlayer = data1
+        local myName = UnitName("player")
+        if targetPlayer and targetPlayer:lower() == myName:lower() then
+            -- This lock is for me
+            if BR.Modules.DragonFlyingBlock then
+                BR.Modules.DragonFlyingBlock:SetTemporaryUnlock(false, sender)
+            end
+        end
     end
+end
+
+-- Send security info to requesting officer
+function BR:SendSecurityInfo(requester)
+    local SecurityCheck = self.Modules.SecurityCheck
+    if not SecurityCheck then return end
+    
+    local data = SecurityCheck:GetSecurityData()
+    if not data then return end
+    
+    -- Format: SECURITY_INFO:totalPlayed:currentEstimate:lastUpdate:wasDisabled:cleanLogout:lastRealTime:resetCount
+    local msg = string.format("SECURITY_INFO:%d:%d:%d:%s:%s:%d:%d", 
+        math.floor(data.totalTimePlayed), 
+        math.floor(data.currentEstimate),
+        data.lastUpdate, 
+        data.wasDisabled and "1" or "0",
+        data.lastCleanLogout and "1" or "0",
+        data.lastRealTime or 0,
+        data.resetCount or 0)
+    
+    self:SendAddonMessage(msg, "WHISPER", requester)
+end
+
+-- Helper: Format time in hours/minutes
+local function FormatPlayedTime(seconds)
+    local hours = math.floor(seconds / 3600)
+    local mins = math.floor((seconds % 3600) / 60)
+    if hours > 0 then
+        return string.format("%dh %dm", hours, mins)
+    else
+        return string.format("%dm", mins)
+    end
+end
+
+-- Display received security info
+function BR:DisplaySecurityInfo(message, sender)
+    local parts = {strsplit(":", message)}
+    if parts[1] ~= "SECURITY_INFO" then return end
+    
+    local totalPlayed = tonumber(parts[2]) or 0
+    local currentEstimate = tonumber(parts[3]) or 0
+    local lastUpdate = tonumber(parts[4]) or 0
+    local wasDisabled = parts[5] == "1"
+    local cleanLogout = parts[6] == "1"
+    local lastRealTime = tonumber(parts[7]) or 0
+    local resetCount = tonumber(parts[8]) or 0
+    
+    -- Berechne Differenz (aktuelle geschätzte Zeit - gespeicherte Zeit)
+    local diff = currentEstimate - totalPlayed
+    
+    -- Update-Alter
+    local updateAge = time() - lastUpdate
+    local updateAgeStr = "Unbekannt"
+    if lastUpdate > 0 then
+        if updateAge < 60 then
+            updateAgeStr = updateAge .. " Sek"
+        elseif updateAge < 3600 then
+            updateAgeStr = math.floor(updateAge / 60) .. " Min"
+        else
+            updateAgeStr = math.floor(updateAge / 3600) .. " Std"
+        end
+    end
+    
+    self:Print("=== Security-Info: " .. sender .. " ===", "info")
+    self:Print("Gespeicherte /played: " .. FormatPlayedTime(totalPlayed), "info")
+    self:Print("Aktuelle /played (geschätzt): " .. FormatPlayedTime(currentEstimate), "info")
+    self:Print("Session-Differenz: " .. FormatPlayedTime(diff), "info")
+    self:Print("Letztes Update vor: " .. updateAgeStr, "info")
+    self:Print("Warnung aktiv: " .. (wasDisabled and "JA" or "Nein"), wasDisabled and "error" or "info")
+    self:Print("Letzter Logout sauber: " .. (cleanLogout and "Ja" or "Nein"), "info")
+    self:Print("Warnungen zurückgesetzt: " .. resetCount .. "x", resetCount > 0 and "warning" or "info")
 end
 
 -- Handle hash response from GM or Officer
@@ -1156,10 +1258,6 @@ BR.Events:SetScript("OnEvent", function(self, event, ...)
         
         -- Setup periodic status broadcast (heartbeat every 5 minutes)
         BR:SetupStatusHeartbeat()
-
-        C_Timer.After(5, function()
-            BR:EnsureShameChannelJoined()
-        end)
     elseif event == "PLAYER_ENTERING_WORLD" then
         BR:RefreshModules()
     elseif event == "CHAT_MSG_ADDON" then
@@ -1278,27 +1376,4 @@ SlashCmdList["ALLFORONE"] = function(msg)
 end
 
 BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
-BR:Print("Für die Gilde, für den Zusammenhalt – bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")
-        BR:Print("|cFF00FF00Addon:|r")
-        BR:Print("  /afo - Einstellungen öffnen")
-        BR:Print("  /afo status - Status anzeigen")
-        BR:Print("  /afo debug - Debug-Modus umschalten")
-        if BR:IsGuildOfficer() then
-            BR:Print("|cFF00FF00Offizier:|r")
-            BR:Print("  /afo admin - Offizier-Übersicht öffnen")
-            BR:Print("  /afo ping - Gildenmitglieder pingen")
-            BR:Print("  /afo reset <Name> - Warnung zurücksetzen")
-        end
-        BR:Print("|cFF00FF00QoL Shortcuts:|r")
-        BR:Print("  /rl - UI neu laden")
-        BR:Print("  /rc - Ready Check")
-        BR:Print("  /inv <Name> - Spieler einladen")
-        BR:Print("  /pt [Sek] - Pull Timer (Standard: 10)")
-        BR:Print("  /pt stop - Pull Timer abbrechen")
-    else
-        BR:Print("Unbekannter Befehl. /afo hilfe für alle Befehle.")
-    end
-end
-
-BR:Print("v" .. BR.Version .. " geladen. /afo für Hilfe.", "info")
-BR:Print("Für die Gilde, für den Zusammenhalt – bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")
+BR:Print("Für die Gilde, für den Zusammenhalt - bleibt fair zueinander und genießt jeden Moment in Azeroth.", "info")

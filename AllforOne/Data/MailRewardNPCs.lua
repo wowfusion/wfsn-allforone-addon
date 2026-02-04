@@ -46,6 +46,14 @@ BR.MailRewardNPCs = {
         zone = "System",
         note = "Blizzard system mail for returning players, achievements, etc."
     },
+
+    -- Legion / Battle for Azeroth / The War Within
+    [122292] = {
+        name = "Thaumaturg Vashreen",
+        names = {"thaumaturg vashreen", "thaumaturge vashreen", "vashreen"},
+        zone = "Dalaran / Oribos / Dornogal",
+        note = "Ethereal vendor for upgrade items and tokens"
+    },
     
     -- Weitere NPCs hier hinzufügen:
     -- [NPC_ID] = {

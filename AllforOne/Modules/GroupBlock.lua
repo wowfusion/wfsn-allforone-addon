@@ -11,6 +11,12 @@ local GroupBlock = {
     loginCooldown = true, -- Verhindert Gruppenprüfung direkt nach Login
 }
 
+-- Tutorial/Startgebiet Map-IDs wo GroupBlock deaktiviert wird
+local TUTORIAL_ZONE_IDS = {
+    [1409] = true, -- Exiles Reach (Tutorial Insel)
+    [2175] = true, -- Exiles Reach (Dungeon: Darkmaul Citadel)
+}
+
 function GroupBlock:OnInitialize()
     BR:Debug("GroupBlock module initialized")
     self:InstallHooks()
@@ -37,7 +43,32 @@ function GroupBlock:Refresh()
     end
 end
 
+-- Prüft ob Spieler in Tutorial-Zone ist
+function GroupBlock:IsInTutorialZone()
+    local mapID = C_Map.GetBestMapForUnit("player")
+    if not mapID then return false end
+    
+    -- Direkte Map-ID Prüfung
+    if TUTORIAL_ZONE_IDS[mapID] then
+        BR:Debug("GroupBlock: In tutorial zone (mapID: " .. mapID .. ")")
+        return true
+    end
+    
+    -- Parent-Map prüfen (für Subzonen)
+    local mapInfo = C_Map.GetMapInfo(mapID)
+    if mapInfo and mapInfo.parentMapID and TUTORIAL_ZONE_IDS[mapInfo.parentMapID] then
+        BR:Debug("GroupBlock: In tutorial zone via parent (mapID: " .. mapID .. ", parent: " .. mapInfo.parentMapID .. ")")
+        return true
+    end
+    
+    return false
+end
+
 function GroupBlock:ShouldBlock()
+    -- Tutorial-Zonen sind ausgenommen
+    if self:IsInTutorialZone() then
+        return false
+    end
     return self.enabled and BR:GetSetting("Enabled") and BR:GetSetting("BlockGroupInvites")
 end
 

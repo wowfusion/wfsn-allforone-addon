@@ -2,34 +2,31 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
-## [1.0.4] - 2026-02-02
+## [1.0.4] - 2026-02-04
 
 ### Behoben
-- **Kritischer Bug: UI-Taint behoben**: Inventar-Interaktionen (Items benutzen, Reittiere erlernen, Bankfächer kaufen) wurden fälschlicherweise blockiert
-- **Performance-Bug mit BetterBags**: Lag/Freeze beim Looten behoben wenn BetterBags und AllforOne gleichzeitig aktiv waren
-- **Entfernungshämmer blockiert**: Der Fernzugriff auf die Kriegsmeutenbank wird jetzt sofort geschlossen
+- **UI-Taint behoben**: Inventar-Interaktionen (Items benutzen, Reittiere erlernen, Bankfächer kaufen) wurden fälschlicherweise blockiert
+- **Performance-Problem behoben**: Massive Lag-Spikes beim Öffnen der Bank wurden behoben
 - **Disconnect-Warnung**: "Addon war deaktiviert" Meldung erscheint nicht mehr nach einem Disconnect
-- **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern (Taxi-Flüge)
-- **Pandaren Startgebiet**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren (Level 1-10)
-- **Death Knight Startgebiet**: Himmelsreiten-Warnung erscheint nicht mehr beim Scourge Gryphon
-- **Post vom Kundensupport**: Mails vom Kundensupport/Kundendienst werden nicht mehr fälschlicherweise blockiert
+- **Flugmeister-Bug**: Himmelsreiten-Warnung erscheint nicht mehr beim Nutzen von Flugmeistern
+- **Startgebiete**: Sicherheitswarnung erscheint nicht mehr bei neutralen Pandaren oder im Death Knight Startgebiet
+- **Tutorial-Insel**: Gruppensperre ist auf der Tutorial-Insel (Exiles Reach) deaktiviert
+- **Post vom Kundensupport**: Mails vom Kundensupport werden nicht mehr fälschlicherweise blockiert
 
 ### Neu
-- **Scham-Feature (Schandelog-Channel)**: Wenn jemand trotz Block Gold in der Kriegsmeutenbank ein-/auszahlt, wird automatisch eine Nachricht im Channel "Schandelog" gepostet (falls vorhanden, sonst im Gildenchat)
-- **Schandelog Auto-Join**: Der Channel "Schandelog" wird beim Login automatisch beigetreten (wenn möglich)
+- **Scham-Feature für Kriegsmeutenbank**: Automatische Gildenchat-Nachricht wenn jemand Gold oder Items ein-/auslagert
+  - Items werden als klickbare Links angezeigt
+  - Mehrere Items werden zusammengefasst (z.B. bei schnellem Einlagern)
+- **Offizier-Tools im Admin-Panel**:
+  - Security-Info Button: Detaillierte Sicherheitsinformationen eines Spielers abrufen
+  - Reset-Counter: Zeigt wie oft eine Warnung zurückgesetzt wurde
+  - Update-Hinweis: Spieler per Whisper zur Addon-Aktualisierung auffordern
+  - Temporäre Flug-Freischaltung: Himmelsreiten für einzelne Spieler temporär freischalten
 
 ### Verbessert
-- **Himmelsreiten-Sperre mit Pfadfinder**: Neue intelligente Logik für Himmelsreiten:
-  - Level unter 70: Himmelsreiten immer blockiert (Statisches Fliegen erzwungen)
-  - Level 70+: Spieler MIT "The War Within Pfadfinder" Achievement → Himmelsreiten blockiert
-  - Level 70+: Spieler OHNE Pfadfinder → Himmelsreiten erlaubt (für Content benötigt)
-- **Kriegsmeutenbank-Block verstärkt**: Zusätzliche Hooks für Gold Ein-/Auszahlung
-- **Third-Party Bank-Addons deaktiviert**: Baganator, BetterBags, Bagnon, AdiBags, ElvUI etc. werden beim Öffnen der Bank versteckt - nur das Standard-Blizzard-BankFrame wird angezeigt für 100% Warbound-Schutz
-- **Kriegsmeutenbank-Tab**: Der Tab wird jetzt unsichtbar gemacht statt mit einem Overlay verdeckt
-- **Addon-Kategorie**: Das Addon erscheint jetzt unter "Guild" in der Blizzard Addon-Liste
-- **Mail Reward NPC Datenbank erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Das Entwicklerteam von WoW)
-- **Himmelsreiten Quest-Ausnahmen**: Weitere Quest IDs hinzugefügt die Himmelsreiten benötigen (65120, 65133, 77345, 68799)
-- **Währungsüberweisung**: "Überweisen"-Button wird jetzt komplett ausgeblendet statt nur blockiert
+- **Addon-Kategorie**: Das Addon erscheint jetzt unter "Wowfusion" in der Blizzard Addon-Liste
+- **Mail-Whitelist erweitert**: Neue NPCs hinzugefügt (Vaskarn, Dansel Adams, Entwicklerteam, Thaumaturg Vashreen)
+- **Währungsüberweisung**: "Überweisen"-Button wird jetzt komplett ausgeblendet
 
 ---
 

@@ -13,3 +13,5 @@ trigger: always_on
 - Beschreibe die Änderungen kurz und prägnant
 - Achte darauf das du Modular programmierst
 - Informiere dich im Internet bei Bedarf
+- Gute Nachschlagewerke für Funktionen und vieles mehr: https://warcraft.wiki.gg/wiki/World_of_Warcraft_API
+- API Dokumentation: https://github.com/Gethe/wow-ui-source/tree/live/Interface/AddOns/Blizzard_APIDocumentationGenerated

@@ -145,7 +145,13 @@ function SecurityCheck:GetCharData()
             sessionActive = false,
             wasDisabled = false,
             lastUpdate = 0,
+            _rc = 0, -- Reset Counter (verschlüsselt als _rc)
         }
+    end
+    
+    -- Migration: Reset Counter hinzufügen falls nicht vorhanden
+    if AllforOneCharDB.SecurityData._rc == nil then
+        AllforOneCharDB.SecurityData._rc = 0
     end
     
     return AllforOneCharDB.SecurityData
@@ -164,10 +170,9 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     BR:Debug("SecurityCheck: Saved played time: " .. (charData.totalTimePlayed or 0))
     
     -- Skip check for neutral Pandaren (they can't join guilds until they choose a faction)
-    -- UnitFactionGroup returns nil for neutral Pandaren on Wandering Isle
     local faction = UnitFactionGroup("player")
     if faction == nil or faction == "Neutral" then
-        BR:Debug("SecurityCheck: Neutral faction (Pandaren starting zone) - skipping check")
+        BR:Debug("SecurityCheck: Neutral faction - skipping check")
         charData.totalTimePlayed = totalTimePlayed
         charData.sessionActive = true
         charData.lastUpdate = time()
@@ -189,8 +194,7 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local timeDiff = totalTimePlayed - charData.totalTimePlayed
     BR:Debug("SecurityCheck: Time difference: " .. timeDiff .. " seconds")
     
-    -- Multi-PC detection: Check if real-world time passed is reasonable
-    -- If someone plays on PC2, the /played on PC1 won't increase but real time will
+    -- Multi-PC detection
     local realTimePassed = 0
     if charData.lastRealTime then
         realTimePassed = time() - charData.lastRealTime
@@ -215,28 +219,14 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local confidenceScore = 0
     local scoreReasons = {}
     
-    -- Check if last session was a clean logout (addon was active)
+    -- Check if last session was a clean logout
     local wasCleanLogout = self:WasCleanLogout()
     
-    -- WICHTIG: Wenn /played Zeit signifikant gestiegen ist, war das Addon definitiv deaktiviert
-    -- Das cleanLogout Flag ist nur ein Hinweis, aber /played ist der definitive Beweis
-    -- Denn: Wenn Addon aktiv war, wird totalTimePlayed kontinuierlich aktualisiert
-    -- Wenn Addon deaktiviert war, bleibt totalTimePlayed stehen aber /played steigt
-    
-    -- Check /played time difference ZUERST - das ist der wichtigste Indikator
+    -- HAUPTLOGIK: /played Differenz ist der wichtigste Indikator
     if timeDiff > INACTIVITY_THRESHOLD then
-        -- /played ist gestiegen = Spieler hat gespielt
-        -- Wenn das Addon aktiv gewesen wäre, hätte es totalTimePlayed aktualisiert
-        -- Also war das Addon deaktiviert!
         confidenceScore = confidenceScore + SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT
-        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min (+" .. (SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT) .. ")")
-        BR:Debug("SecurityCheck: Time difference > threshold - ADDON WAS DISABLED (+" .. (SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT) .. ")")
-    elseif not wasCleanLogout then
-        -- Kein sauberer Logout aber auch keine /played Differenz
-        -- Das könnte ein Crash sein, aber kein Beweis für Deaktivierung
-        BR:Debug("SecurityCheck: No clean logout but no time difference - probably crash, not disabling")
-    else
-        BR:Debug("SecurityCheck: Clean logout detected - addon was active last session")
+        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min")
+        BR:Debug("SecurityCheck: Time difference > threshold - ADDON WAS DISABLED")
     end
     
     -- Check gold difference (additional indicator)
@@ -253,28 +243,25 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     
     BR:Debug("SecurityCheck: Confidence Score: " .. confidenceScore .. "/" .. CONFIDENCE_THRESHOLD)
     
-    -- Skip warning conditions (override score)
+    -- Skip warning conditions
     local skipWarning = false
     
-    -- Wenn die Real-Time viel größer ist als die /played Differenz, war der Spieler auf einem anderen PC
-    if realTimePassed > 86400 then -- > 24 Stunden seit letztem Login
+    if realTimePassed > 86400 then
         skipWarning = true
         BR:Debug("SecurityCheck: Long time since last login, skipping check")
     elseif timeDiff > 3600 and realTimePassed > timeDiff * 2 then
-        -- Real-Time ist mehr als doppelt so groß wie /played Differenz = Multi-PC
         skipWarning = true
-        BR:Debug("SecurityCheck: Multi-PC scenario detected (realTime >> timeDiff)")
+        BR:Debug("SecurityCheck: Multi-PC scenario detected")
     end
     
-    -- Warnung nur wenn Confidence Score hoch genug UND keine Skip-Bedingung
+    -- Warnung ausgeben
     if confidenceScore >= CONFIDENCE_THRESHOLD and not skipWarning then
-        -- Addon war deaktiviert!
         charData.wasDisabled = true
         charData.disabledReasons = scoreReasons
-        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Score: " .. confidenceScore .. ", Reasons: " .. table.concat(scoreReasons, ", "))
+        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Score: " .. confidenceScore)
         BR:Print("WARNUNG: Addon war deaktiviert! (Score: " .. confidenceScore .. ")", "error")
     elseif confidenceScore > 0 and confidenceScore < CONFIDENCE_THRESHOLD then
-        BR:Debug("SecurityCheck: Score too low for warning (" .. confidenceScore .. " < " .. CONFIDENCE_THRESHOLD .. ")")
+        BR:Debug("SecurityCheck: Score too low for warning")
     end
     
     -- Save current gold for next check
@@ -309,6 +296,7 @@ function SecurityCheck:MarkCleanLogout()
     local charData = self:GetCharData()
     charData.cleanLogout = true
     charData.cleanLogoutTime = time()
+    charData.lastCleanLogoutStatus = true -- Permanentes Flag für Info-Abfrage
     -- Save current gold amount
     charData.lastGold = GetMoney()
     BR:Debug("SecurityCheck: Marked clean logout at " .. charData.cleanLogoutTime .. ", Gold: " .. (charData.lastGold or 0))
@@ -317,12 +305,42 @@ end
 function SecurityCheck:WasCleanLogout()
     local charData = self:GetCharData()
     if charData.cleanLogout then
-        -- Reset the flag
+        -- Reset the flag für nächsten Check
         charData.cleanLogout = false
+        charData.lastCleanLogoutStatus = true -- Behalte Status für Info
         BR:Debug("SecurityCheck: Last session was a clean logout")
         return true
     end
+    charData.lastCleanLogoutStatus = false
     return false
+end
+
+-- Gibt die letzte bekannte /played Zeit zurück (für Security-Info Anfragen)
+function SecurityCheck:GetCurrentPlayedEstimate()
+    local charData = self:GetCharData()
+    local base = charData.totalTimePlayed or 0
+    
+    -- Addiere aktuelle Session-Zeit
+    if self.startServerTime then
+        local sessionDuration = time() - self.startServerTime
+        base = base + sessionDuration
+    end
+    
+    return base
+end
+
+-- Gibt alle Security-Daten für Info-Abfrage zurück
+function SecurityCheck:GetSecurityData()
+    local charData = self:GetCharData()
+    return {
+        totalTimePlayed = charData.totalTimePlayed or 0,
+        currentEstimate = self:GetCurrentPlayedEstimate(),
+        lastUpdate = charData.lastUpdate or 0,
+        wasDisabled = charData.wasDisabled or false,
+        lastCleanLogout = charData.lastCleanLogoutStatus or false,
+        lastRealTime = charData.lastRealTime or 0,
+        resetCount = charData._rc or 0,
+    }
 end
 
 function SecurityCheck:UpdateSessionTime()
@@ -415,14 +433,29 @@ function SecurityCheck:HideWarningWindow()
     end
 end
 
+-- Cooldown für Reset (verhindert Doppelklicks)
+local lastResetTime = 0
+local RESET_COOLDOWN = 3 -- Sekunden
+
 function SecurityCheck:ResetWarning(resetterName)
+    -- Cooldown prüfen
+    local now = GetTime()
+    if now - lastResetTime < RESET_COOLDOWN then
+        BR:Debug("SecurityCheck: Reset ignored - cooldown active")
+        return
+    end
+    lastResetTime = now
+    
     local charData = self:GetCharData()
     charData.wasDisabled = false
     
+    -- Reset Counter erhöhen (verschlüsselt als _rc)
+    charData._rc = (charData._rc or 0) + 1
+    
     self:HideWarningWindow()
     
-    BR:Print("Warnung wurde von " .. resetterName .. " zurückgesetzt.", "info")
-    BR:Debug("SecurityCheck: Warning reset by " .. resetterName)
+    BR:Print("Warnung wurde von " .. resetterName .. " zurückgesetzt. (Reset #" .. charData._rc .. ")", "info")
+    BR:Debug("SecurityCheck: Warning reset by " .. resetterName .. " - Total resets: " .. charData._rc)
 end
 
 -- Check if player can reset warnings (officer or guild master)

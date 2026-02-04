@@ -2,147 +2,79 @@
 
 Technische Änderungen und Details für Entwickler.
 
-## [1.0.4] - 2026-02-02
+## [1.0.4] - 2026-02-03
 
-### Modules/WarboundBlock.lua
+### Modules/WarboundBlock.lua - Komplett neu geschrieben
 
-#### KRITISCH: UI-Taint Bug behoben
-- **Problem**: Direkte Hooks auf `C_Bank.DepositMoney`, `C_Bank.WithdrawMoney`, `C_Bank.DepositItem`, `C_Bank.AutoDepositItemsIntoBank` und `C_CurrencyInfo.RequestCurrencyFromAccountCharacter` verursachten "Taint"
-- **Auswirkung**: ALLE geschützten UI-Aktionen wurden blockiert (Items benutzen, Reittiere erlernen, Bankfächer kaufen, etc.)
-- **Fehlermeldung**: "AllforOne wurde geblockt. Die angeforderte Funktion ist der Blizzard-UI vorbehalten."
-- **Lösung**: Alle direkten Hooks auf geschützte `C_Bank` und `C_CurrencyInfo` Funktionen entfernt
-- **Neue Strategie**: Nur UI-basierte Blockierung (Tabs verstecken, Buttons verstecken, `hooksecurefunc` für sichere Post-Hooks)
+#### Architektur
+- **Minimalistisch**: Modul komplett neu geschrieben für Performance und Stabilität
+- **Kein Third-Party Support**: Baganator, BetterBags, Bagnon etc. Support entfernt (verursachte Performance-Probleme)
 
-#### Währungsüberweisung: Button ausblenden
-- **Änderung**: `CurrencyTransferToggleButton` wird jetzt komplett versteckt statt nur blockiert
-- **Grund**: PreClick/OnClick Hooks verhinderten nicht das Verschieben des Charakterfensters
-- **Implementierung**: `transferButton:Hide()` + `OnShow` Hook um Button versteckt zu halten
+#### ADDON_ACTION_BLOCKED behoben
+- **Problem**: `SendChatMessage()` aus `hooksecurefunc` Callbacks verursachte Taint
+- **Lösung**: `C_Timer.After(0, ...)` Wrapper + nur `SendChatMessage(msg, "GUILD")`
+- **Hinweis**: `SendChatMessage("CHANNEL")` und `C_Club.SendMessage()` sind protected (Hardware-Event erforderlich)
 
-#### Performance-Bug behoben: BetterBags Lag beim Looten
-- **Problem**: `pairs(_G)` Iterationen in `GetBetterBagsFrames()` und `HideThirdPartyWarbandTabs()` wurden bei jedem `BAG_UPDATE_DELAYED` Event ausgeführt
-- **Auswirkung**: Lag/Freeze beim Looten wenn BetterBags aktiv war (tausende globale Variablen wurden durchsucht)
-- **Lösung**: 
-  - `GetBetterBagsFrames()`: `_G` Iteration komplett entfernt, Frames werden jetzt gecacht
-  - `HideThirdPartyWarbandTabs()`: Zwei `pairs(_G)` Iterationen entfernt, nutzt jetzt nur bekannte Frame-Namen
+#### UI-Taint behoben
+- **Problem**: Direkte Hooks auf `C_Bank` Funktionen blockierten alle UI-Aktionen
+- **Lösung**: Nur `hooksecurefunc` für sichere Post-Hooks, UI-basierte Blockierung (Tab verstecken)
 
-#### UI-Taint beim Bankfach kaufen behoben (zusätzlich)
-- **Problem**: `BankFrame.TabSystem` Manipulationen verursachten Taint der `PurchaseBankTab()` blockierte
-- **Lösung**: 
-  - Alle direkten `Hide()` Aufrufe auf BankFrame-Elemente entfernt
-  - Neuer Ansatz: Overlay-Frame + `SetAlpha(0)` um Tab unsichtbar zu machen ohne Taint
-  - `hiddenAlphaTab` Variable speichert Referenz für Alpha-Wiederherstellung
+#### Item-Tracking via BAG_UPDATE Event
+- **Event**: `BAG_UPDATE` mit Check auf Account Bank BagIDs (`Enum.BagIndex.AccountBankTab_1` bis `_5`)
+- **Hinweis**: `PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED` funktionierte nicht zuverlässig
 
-#### Entfernungshämmer (Spell 460905) Blocking
-- **Implementierung**: `UNIT_SPELLCAST_SUCCEEDED` Event-Handler für Spell ID 460905
-- **Hinweis**: `SpellStopCasting()` ist geschützt und kann nicht verwendet werden
-- **Fallback**: Bank wird sofort geschlossen wenn der Spell durchgeht
+#### Snapshot-basiertes Item-Tracking
+- `SnapshotAccountBank()`: Erstellt Snapshot aller Items in Account Bank
+- `DetectChanges()`: Vergleicht aktuellen Zustand mit Snapshot
+- Erkennt: Items hinzugefügt/entfernt, Stack-Größen-Änderungen
+- Item-Hyperlinks werden für klickbare Chat-Links verwendet
 
-#### Gildenchat Scham-Feature
-- **Neue Funktion**: `SendShameMessage(action, details)` - Sendet Scham-Nachricht in Custom-Channel (Default: `Schandelog`), Fallback: `GUILD`
-- **Cooldown**: 5 Sekunden zwischen Nachrichten um Spam zu vermeiden
-- **Aktionen**: `deposit_gold`, `withdraw_gold`, `deposit_item`, `withdraw_item`, `deposit_all`
-- **Nachrichtenformat**: "Schande über mich! Ich habe [Item/Gold] entnommen/eingelagert!"
+#### Scham-Nachrichten
+- `SendShameMessage(action, details)`: Sendet Nachricht in Gildenchat
+- Cooldown: 5 Sekunden zwischen Nachrichten
+- Aktionen: `deposit_gold`, `withdraw_gold`, `deposit_item`, `withdraw_item`, `deposit_all`
 
-#### Schandelog Auto-Join
-- **Neu**: `BR:EnsureShameChannelJoined()` versucht beim Login einmalig den Channel `Schandelog` (oder `ShameChannelName`) zu joinen
-- **Trigger**: `PLAYER_LOGIN` mit Delay (5s)
-
-#### Item-Tracking für Scham-Feature
-- **Status**: Deaktiviert (zu unzuverlässig / False Positives)
-
-#### Verstärkte Post-Hooks
-- **Neu**: `hooksecurefunc(C_Bank, "WithdrawMoney")` - Erkennt Gold-Entnahme
-- **Neu**: `hooksecurefunc(C_Bank, "AutoDepositItemsIntoBank")` - Erkennt Auto-Einlagerung
-- **Alle Hooks**: Lösen jetzt Scham-Nachricht aus wenn Warbound-Bank betroffen
-
-#### Third-Party Bank-Addon Deaktivierung
-- **Neue Funktion**: `ForceBlizzardBankFrame()` - Versteckt alle Third-Party Bank-Frames
-- **Unterstützte Addons**: Baganator, BetterBags, Bagnon, AdiBags, ArkInventory, Inventorian, Combuctor, ElvUI
-- **Aufruf**: Bei `BANKFRAME_OPENED` und im Ticker alle 0.3 Sekunden
-- **Grund**: 100% Warbound-Schutz durch Erzwingen des Standard-Blizzard-BankFrames
-- **Benachrichtigung**: User wird informiert wenn Third-Party Frame versteckt wird
+#### Gold-Tracking via hooksecurefunc
+- `C_Bank.DepositMoney` - Gold-Einzahlung erkennen
+- `C_Bank.WithdrawMoney` - Gold-Entnahme erkennen
+- `C_Bank.AutoDepositItemsIntoBank` - Auto-Einlagerung erkennen
 
 ### Modules/MailBlock.lua
-
-#### Absender-Whitelist erweitert
-- **Fix**: System-Absender für Blizzard Kundensupport/Kundendienst zur `SENDER_WHITELIST` hinzugefügt, damit Support-Mails nicht geblockt werden
+- Kundensupport/Kundendienst zur Whitelist hinzugefügt
 
 ### Modules/AdminPanel.lua
-
-#### Developer-Check entfernt
-- **Grund**: Hash-basierter Developer-Check war nicht sicher da Code auf CurseForge öffentlich ist
-- **Entfernt**: `SimpleHash()`, `DEVELOPER_HASHES`, `IsDeveloper()` Funktionen
-- **Jetzt**: Nur Gildenoffiziere (Rang 0-1) haben Zugang zum AdminPanel
+- Developer-Check entfernt (nur Offiziere haben Zugang)
+- Neuer "Security-Info anfordern" Button
+- Neuer "Update-Hinweis senden" Button (Whisper)
+- Neue "Fliegen: AN/AUS" Buttons für temporäre Freischaltung
 
 ### Core.lua
-
-#### Developer-Fallback entfernt
-- **Entfernt**: Hardcoded Character-Name Check in `IsGuildOfficer()`
+- `REQUEST_SECURITY_INFO` / `SECURITY_INFO` Message-Handler
+- `UNLOCK_FLYING` / `LOCK_FLYING` Message-Handler
+- `SendSecurityInfo()` / `DisplaySecurityInfo()` Funktionen
 
 ### AllforOne.toc
-
-#### Addon-Kategorie
-- **Hinzugefügt**: `## Category: Guild` für Blizzard Addon-Manager Kategorisierung
+- `## Category: Guild` für Addon-Manager
 
 ### Modules/DragonFlyingBlock.lua
-
-#### Pfadfinder-basierte Himmelsreiten-Logik
-- **Neue Konstanten**:
-  - `PATHFINDER_CHECK_LEVEL = 70`: Level ab dem Pfadfinder-Check greift
-  - `TWW_PATHFINDER_ACHIEVEMENT_ID = 40231`: The War Within Pathfinder Achievement
-- **Neue Funktion**: `HasPathfinderAchievement()` - Prüft ob Spieler Achievement 40231 hat
-- **Geänderte Logik in `ShouldBlock()`**:
-  - Level < 70: Himmelsreiten immer blockiert (Statisches Fliegen erzwungen)
-  - Level 70+, HAT Pfadfinder: Himmelsreiten blockiert (kann Statisch fliegen)
-  - Level 70+, KEIN Pfadfinder: Himmelsreiten erlaubt (braucht es für TWW Content)
-- **Grund**: Spieler ohne Pfadfinder können in Khaz Algar nur mit Himmelsreiten fliegen
+- `ENABLE_PATHFINDER_EXCEPTION = false` (Pfadfinder-Ausnahme deaktiviert)
+- `temporaryUnlock` Variable für temporäre Offizier-Freischaltung
+- `SetTemporaryUnlock(enabled, officerName)` Funktion
+- `IsTemporarilyUnlocked()` Funktion
+- Flugmeister (Taxi) Ausnahme
+- Death Knight Startgebiet Ausnahme
+- Neue Quest-Ausnahmen: 65120, 65133, 77345, 68799
 
 ### Modules/SecurityCheck.lua
-
-#### Disconnect-Erkennung implementiert
-- **Problem**: "Addon war deaktiviert" Meldung erschien fälschlicherweise nach einem DC
-- **Lösung**: "Clean Logout" Flag implementiert
-- **Neue Funktionen**:
-  - `MarkCleanLogout()`: Setzt `charData.cleanLogout = true` bei `PLAYER_LEAVING_WORLD`/`PLAYER_LOGOUT`
-  - `WasCleanLogout()`: Prüft ob letzter Logout sauber war
-- **Logik**: Bei DC wird `PLAYER_LEAVING_WORLD` trotzdem aufgerufen wenn Addon aktiv war. Nur wenn Addon deaktiviert war, wird es NICHT aufgerufen.
-- **Neues Event**: `PLAYER_LOGOUT` registriert
-
-#### Pandaren Startgebiet Ausnahme
-- **Problem**: Neutrale Pandaren (Level 1-10) können keiner Gilde beitreten
-- **Lösung**: `UnitFactionGroup("player")` Check - wenn `nil` oder `"Neutral"`, wird SecurityCheck übersprungen
-
-### Modules/DragonFlyingBlock.lua
-
-#### Flugmeister (Taxi) Ausnahme
-- **Problem**: Himmelsreiten-Warnung erschien beim Nutzen von Flugmeistern
-- **Lösung**: `UnitOnTaxi("player")` Check in `CheckAndDismount()` und `CheckDruidFlightForm()`
-
-#### Death Knight Startgebiet Ausnahme
-- **Problem**: Scourge Gryphon im DK Startgebiet löste Himmelsreiten-Warnung aus
-- **Lösung**: Neue Zonen in `EXCEPTION_ZONE_IDS`:
-  - `4298`: Plaguelands: The Scarlet Enclave (DK Starting Zone)
-  - `4281`: Acherus: The Ebon Hold (old)
-  - `7679`: Acherus: The Ebon Hold (new)
-
-#### Neue Quest-Ausnahmen
-- **Quest IDs hinzugefügt**: 65120, 65133, 77345, 68799
-- **Grund**: Diese Quests benötigen Himmelsreiten zum Abschließen
+- Disconnect-Erkennung (Clean Logout Flag)
+- Pandaren Startgebiet Ausnahme (neutrale Fraktion)
+- `GetSecurityData()` Funktion für Security-Info Abfrage
+- `_rc` SavedVariable für Reset-Counter (verschlüsselt)
+- `RESET_COOLDOWN = 3` Sekunden zwischen Resets
+- `lastResetTime` für Cooldown-Tracking
 
 ### Data/MailRewardNPCs.lua
-
-#### Datenbank erweitert
-- **Neue NPCs**:
-  - `[203404]` Vaskarn (Zaralek Cavern / Valdrakken)
-  - `[28930]` Dansel Adams (Plaguewood)
-  - `[32842]` The WoW Dev Team / Das Entwicklerteam von WoW (System)
-- **Struktur erweitert**: `names` Array für lokalisierte Namen
-  ```lua
-  names = {"the wow dev team", "das entwicklerteam von wow", ...}
-  ```
-
-#### MailBlock Integration
-- **Geändert**: `BuildNPCWhitelist()` lädt jetzt alle Namen aus dem `names` Array
+- Neue NPCs: Vaskarn, Dansel Adams, Das Entwicklerteam von WoW
 
 ---
 
