@@ -14,7 +14,7 @@ local SecurityCheck = {
 -- Warnung wenn /played Differenz > INACTIVITY_THRESHOLD:
 -- CODE-01: Nur /played Differenz überschritten
 -- CODE-02: /played Differenz + Gold hat sich geändert
-local INACTIVITY_THRESHOLD = 180 -- 3 Minuten
+local INACTIVITY_THRESHOLD = 120 -- 2 Minuten
 
 function SecurityCheck:OnInitialize()
     BR:Debug("SecurityCheck module initialized")
