@@ -275,7 +275,6 @@ end
 function SecurityCheck:MarkCleanLogout()
     local charData = self:GetCharData()
     charData.lastCleanLogoutStatus = true -- Permanentes Flag für Info-Abfrage
-    -- Save current gold amount
     charData.lastGold = GetMoney()
     BR:Debug("SecurityCheck: Marked clean logout, Gold: " .. (charData.lastGold or 0))
 end
@@ -325,6 +324,8 @@ function SecurityCheck:ShowWarningWindow()
         return -- Already showing
     end
     
+    local charData = self:GetCharData()
+    local code = charData.disabledCode or "CODE-01"
     local isOfficer = BR:IsGuildOfficer()
     local frameHeight = 140
     
@@ -332,10 +333,9 @@ function SecurityCheck:ShowWarningWindow()
     local frame = CreateFrame("Frame", "AllforOneSecurityWarning", UIParent, "BackdropTemplate")
     frame:SetSize(420, frameHeight)
     frame:SetPoint("TOP", 0, -100)
-    frame:SetFrameStrata("FULLSCREEN_DIALOG")
-    frame:SetFrameLevel(500)
+    frame:SetFrameStrata("HIGH") -- Unter dem Release Spirit Popup (DIALOG Strata)
+    frame:SetFrameLevel(100)
     
-    -- Use popup-style backdrop with red border
     frame:SetBackdrop(BR.Backdrops.Popup)
     frame:SetBackdropColor(0.1, 0.02, 0.02, 0.98)
     frame:SetBackdropBorderColor(0.8, 0.1, 0.1, 1)
@@ -372,27 +372,20 @@ function SecurityCheck:ShowWarningWindow()
     end
     text:SetText(warningText)
     
-    -- Code-Anzeige (CODE-01 / CODE-02) unten klein
-    local charData = self:GetCharData()
-    local codeText = charData.disabledCode or "CODE-01"
-    
+    -- Code-Anzeige unten rechts
     local codeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    codeLabel:SetPoint("BOTTOM", 0, 28)
-    codeLabel:SetText("|cFF999999" .. codeText .. "|r")
+    codeLabel:SetPoint("BOTTOMRIGHT", -12, 10)
+    codeLabel:SetText("|cFF666666" .. code .. "|r")
     
-    -- Player info at bottom
+    -- Player info unten links
     local playerInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    playerInfo:SetPoint("BOTTOM", 0, 15)
+    playerInfo:SetPoint("BOTTOMLEFT", 12, 10)
     playerInfo:SetText("|cFF666666" .. self:GetCharKey() .. "|r")
     
     frame:Show()
     self.warningFrame = frame
     
-    -- No close button - warning can only be reset via AdminPanel overview
-    
-    -- Play warning sound
     PlaySound(SOUNDKIT.RAID_WARNING)
-    
     BR:Print("WARNUNG: Das Addon war deaktiviert!", "error")
 end
 
