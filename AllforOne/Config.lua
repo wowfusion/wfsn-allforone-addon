@@ -708,7 +708,8 @@ local function CreateInterfaceOptionsPanel()
         return check
     end
     
-    local muteCheck = CreateOptionCheckbox(scrollChild, localTitle, "Benachrichtigungstöne deaktivieren", "MuteNotificationSounds")
+    local sensitiveCheck = CreateOptionCheckbox(scrollChild, localTitle, "Sensible Scham-Nachrichten (ohne Schande-Formulierung)", "SensitiveShameMode")
+    local muteCheck = CreateOptionCheckbox(scrollChild, sensitiveCheck, "Benachrichtigungstöne deaktivieren", "MuteNotificationSounds")
     local welcomeCheck = CreateOptionCheckbox(scrollChild, muteCheck, "Willkommensbildschirm beim Login", "ShowWelcomeOnLogin")
     local debugCheck = CreateOptionCheckbox(scrollChild, welcomeCheck, "Debug-Modus", "DebugMode")
     

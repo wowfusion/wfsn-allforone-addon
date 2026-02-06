@@ -361,6 +361,7 @@ function BR:InitializeDefaults()
         ShameChannelName = "Schandelog",
         BlockDragonFlying = true, -- Himmelsreiten bis Level 80 blockieren
         MailBlockMode = "selective", -- "full" or "selective"
+        SensitiveShameMode = false, -- Sensible statt Scham-Nachrichten (pro Spieler)
         DebugMode = false,
         MuteNotificationSounds = false,
         ShowWelcomeOnLogin = true,

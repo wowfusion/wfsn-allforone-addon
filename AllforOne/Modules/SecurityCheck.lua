@@ -11,11 +11,10 @@ local SecurityCheck = {
     warningFrame = nil,
 }
 
--- Confidence Score Thresholds
-local CONFIDENCE_THRESHOLD = 60  -- Warnung nur wenn Score >= 60
-local SCORE_NO_CLEAN_LOGOUT = 50 -- Kein sauberer Logout
-local SCORE_TIME_DIFF = 30       -- /played Differenz > Threshold
-local SCORE_GOLD_CHANGED = 20    -- Gold hat sich geändert
+-- Warnung wenn /played Differenz > INACTIVITY_THRESHOLD:
+-- CODE-01: Nur /played Differenz überschritten
+-- CODE-02: /played Differenz + Gold hat sich geändert
+local INACTIVITY_THRESHOLD = 180 -- 3 Minuten
 
 function SecurityCheck:OnInitialize()
     BR:Debug("SecurityCheck module initialized")
@@ -144,7 +143,10 @@ function SecurityCheck:GetCharData()
             totalTimePlayed = 0,
             sessionActive = false,
             wasDisabled = false,
+            disabledCode = nil,
             lastUpdate = 0,
+            lastRealTime = 0,
+            lastGold = 0,
             _rc = 0, -- Reset Counter (verschlüsselt als _rc)
         }
     end
@@ -156,10 +158,6 @@ function SecurityCheck:GetCharData()
     
     return AllforOneCharDB.SecurityData
 end
-
--- Threshold for detecting addon was disabled (in seconds)
--- 60 seconds is enough to detect addon deactivation via /reload
-local INACTIVITY_THRESHOLD = 60
 
 function SecurityCheck:CheckSessionStatus(totalTimePlayed)
     local charData = self:GetCharData()
@@ -177,6 +175,7 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
         charData.sessionActive = true
         charData.lastUpdate = time()
         charData.lastRealTime = time()
+        charData.lastGold = GetMoney()
         return
     end
     
@@ -186,95 +185,75 @@ function SecurityCheck:CheckSessionStatus(totalTimePlayed)
         charData.sessionActive = true
         charData.lastUpdate = time()
         charData.lastRealTime = time()
+        charData.lastGold = GetMoney()
         BR:Debug("SecurityCheck: First time initialization")
         return
     end
     
-    -- Calculate time difference
+    -- /played Differenz berechnen
     local timeDiff = totalTimePlayed - charData.totalTimePlayed
-    BR:Debug("SecurityCheck: Time difference: " .. timeDiff .. " seconds")
+    BR:Debug("SecurityCheck: Time difference: " .. timeDiff .. " seconds (" .. string.format("%.1f", timeDiff/60) .. " min)")
     
-    -- Multi-PC detection
+    -- Real-Time seit letztem Login
     local realTimePassed = 0
     if charData.lastRealTime then
         realTimePassed = time() - charData.lastRealTime
     end
     BR:Debug("SecurityCheck: Real time since last update: " .. realTimePassed .. " seconds")
     
-    -- Addon war deaktiviert wenn:
-    -- 1. Die /played Zeit ist gestiegen (timeDiff > 0) UND
-    -- 2. Die Zeitdifferenz ist größer als der Threshold UND
-    -- 3. Es war KEIN sauberer Logout (DC vs. normaler Logout)
-    --
-    -- Szenarien die wir NICHT als "Addon deaktiviert" werten:
-    -- - Clean Logout: PLAYER_LEAVING_WORLD wurde aufgerufen (normaler Logout/DC mit Addon aktiv)
-    -- - Multi-PC: realTimePassed >> timeDiff (Spieler war auf anderem PC, /played dort erhöht)
-    -- - Sehr lange Abwesenheit: > 24h seit letztem Login
-    --
-    -- Bei einem DC wird PLAYER_LEAVING_WORLD trotzdem aufgerufen wenn das Addon aktiv war.
-    -- Nur wenn das Addon deaktiviert war, wird PLAYER_LEAVING_WORLD NICHT aufgerufen.
-    
-    -- Confidence Score System
-    -- Kombiniert mehrere Indikatoren um False Positives zu reduzieren
-    local confidenceScore = 0
-    local scoreReasons = {}
-    
-    -- Check if last session was a clean logout
-    local wasCleanLogout = self:WasCleanLogout()
-    
-    -- HAUPTLOGIK: /played Differenz ist der wichtigste Indikator
-    if timeDiff > INACTIVITY_THRESHOLD then
-        confidenceScore = confidenceScore + SCORE_TIME_DIFF + SCORE_NO_CLEAN_LOGOUT
-        table.insert(scoreReasons, "/played Differenz: " .. math.floor(timeDiff/60) .. " Min")
-        BR:Debug("SecurityCheck: Time difference > threshold - ADDON WAS DISABLED")
-    end
-    
-    -- Check gold difference (additional indicator)
+    -- Gold-Differenz prüfen
     local currentGold = GetMoney()
     local lastGold = charData.lastGold or 0
     local goldChanged = (lastGold > 0 and currentGold ~= lastGold)
-    if goldChanged and timeDiff > INACTIVITY_THRESHOLD then
-        confidenceScore = confidenceScore + SCORE_GOLD_CHANGED
+    
+    if goldChanged then
         local goldDiff = currentGold - lastGold
-        local goldDiffStr = goldDiff > 0 and ("+" .. GetCoinTextureString(goldDiff)) or ("-" .. GetCoinTextureString(math.abs(goldDiff)))
-        table.insert(scoreReasons, "Gold geändert: " .. goldDiffStr .. " (+" .. SCORE_GOLD_CHANGED .. ")")
-        BR:Debug("SecurityCheck: Gold changed from " .. lastGold .. " to " .. currentGold .. " (+" .. SCORE_GOLD_CHANGED .. ")")
+        BR:Debug("SecurityCheck: Gold changed by " .. goldDiff .. " copper")
     end
     
-    BR:Debug("SecurityCheck: Confidence Score: " .. confidenceScore .. "/" .. CONFIDENCE_THRESHOLD)
-    
-    -- Skip warning conditions
+    -- Skip-Bedingungen (False Positive Vermeidung)
     local skipWarning = false
     
     if realTimePassed > 86400 then
+        -- Länger als 24h seit letztem Login
         skipWarning = true
-        BR:Debug("SecurityCheck: Long time since last login, skipping check")
+        BR:Debug("SecurityCheck: > 24h since last login, skipping")
     elseif timeDiff > 3600 and realTimePassed > timeDiff * 2 then
+        -- Multi-PC Szenario
         skipWarning = true
-        BR:Debug("SecurityCheck: Multi-PC scenario detected")
+        BR:Debug("SecurityCheck: Multi-PC scenario detected, skipping")
     end
     
-    -- Warnung ausgeben
-    if confidenceScore >= CONFIDENCE_THRESHOLD and not skipWarning then
+    -- Warnung wenn /played Differenz über Threshold:
+    -- CODE-01: Nur /played Differenz
+    -- CODE-02: /played Differenz + Gold hat sich geändert
+    if timeDiff > INACTIVITY_THRESHOLD and not skipWarning then
         charData.wasDisabled = true
-        charData.disabledReasons = scoreReasons
-        BR:Debug("SecurityCheck: ADDON WAS DISABLED! Score: " .. confidenceScore)
-        BR:Print("WARNUNG: Addon war deaktiviert! (Score: " .. confidenceScore .. ")", "error")
-    elseif confidenceScore > 0 and confidenceScore < CONFIDENCE_THRESHOLD then
-        BR:Debug("SecurityCheck: Score too low for warning")
+        
+        if goldChanged then
+            -- CODE-02: /played Differenz + Gold verändert
+            local goldDiff = currentGold - lastGold
+            local goldDiffStr = goldDiff > 0 and ("+" .. GetCoinTextureString(goldDiff)) or ("-" .. GetCoinTextureString(math.abs(goldDiff)))
+            charData.disabledCode = "CODE-02"
+            BR:Debug("SecurityCheck: CODE-02! /played +" .. math.floor(timeDiff/60) .. " Min, Gold: " .. goldDiffStr)
+            BR:Print("WARNUNG: Addon war deaktiviert! [CODE-02] (/played +" .. math.floor(timeDiff/60) .. " Min, Gold verändert)", "error")
+        else
+            -- CODE-01: Nur /played Differenz
+            charData.disabledCode = "CODE-01"
+            BR:Debug("SecurityCheck: CODE-01! /played +" .. math.floor(timeDiff/60) .. " Min")
+            BR:Print("WARNUNG: Addon war deaktiviert! [CODE-01] (/played +" .. math.floor(timeDiff/60) .. " Min)", "error")
+        end
     end
     
-    -- Save current gold for next check
+    -- Daten aktualisieren
     charData.lastGold = currentGold
-    
-    -- Update stored time
     charData.totalTimePlayed = totalTimePlayed
     charData.sessionActive = true
     charData.lastUpdate = time()
     charData.lastRealTime = time()
     self.startServerTime = time()
     
-    -- Check if warning should be shown
+    -- Warnung anzeigen falls aktiv
     if charData.wasDisabled then
         self:ShowWarningWindow()
     end
@@ -288,31 +267,17 @@ function SecurityCheck:SaveSessionTime()
         charData.totalTimePlayed = charData.totalTimePlayed + sessionDuration
         charData.lastUpdate = time()
         charData.sessionActive = true
+        self.startServerTime = nil -- Verhindert doppelte Addition bei PLAYER_LEAVING_WORLD + PLAYER_LOGOUT
         BR:Debug("SecurityCheck: Saved session time. Total: " .. charData.totalTimePlayed)
     end
 end
 
 function SecurityCheck:MarkCleanLogout()
     local charData = self:GetCharData()
-    charData.cleanLogout = true
-    charData.cleanLogoutTime = time()
     charData.lastCleanLogoutStatus = true -- Permanentes Flag für Info-Abfrage
     -- Save current gold amount
     charData.lastGold = GetMoney()
-    BR:Debug("SecurityCheck: Marked clean logout at " .. charData.cleanLogoutTime .. ", Gold: " .. (charData.lastGold or 0))
-end
-
-function SecurityCheck:WasCleanLogout()
-    local charData = self:GetCharData()
-    if charData.cleanLogout then
-        -- Reset the flag für nächsten Check
-        charData.cleanLogout = false
-        charData.lastCleanLogoutStatus = true -- Behalte Status für Info
-        BR:Debug("SecurityCheck: Last session was a clean logout")
-        return true
-    end
-    charData.lastCleanLogoutStatus = false
-    return false
+    BR:Debug("SecurityCheck: Marked clean logout, Gold: " .. (charData.lastGold or 0))
 end
 
 -- Gibt die letzte bekannte /played Zeit zurück (für Security-Info Anfragen)
@@ -350,6 +315,7 @@ function SecurityCheck:UpdateSessionTime()
         local sessionDuration = time() - self.startServerTime
         charData.totalTimePlayed = charData.totalTimePlayed + sessionDuration
         charData.lastUpdate = time()
+        charData.lastGold = GetMoney() -- Gold periodisch aktualisieren für Crash-Sicherheit
         self.startServerTime = time()
     end
 end
@@ -405,6 +371,14 @@ function SecurityCheck:ShowWarningWindow()
         warningText = warningText .. "\n\n|cFF888888Diese Warnung kann nur von einem\nGildenoffizier zurückgesetzt werden.|r"
     end
     text:SetText(warningText)
+    
+    -- Code-Anzeige (CODE-01 / CODE-02) unten klein
+    local charData = self:GetCharData()
+    local codeText = charData.disabledCode or "CODE-01"
+    
+    local codeLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    codeLabel:SetPoint("BOTTOM", 0, 28)
+    codeLabel:SetText("|cFF999999" .. codeText .. "|r")
     
     -- Player info at bottom
     local playerInfo = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

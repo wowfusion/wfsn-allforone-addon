@@ -3,7 +3,7 @@
 ## Notes: Guildfound Addon für WoW Retail - wowfusion.de
 ## Notes-deDE: Guildfound Addon für WoW Retail - wowfusion.de
 ## Author: wowfusion.de
-## Version: 1.0.4
+## Version: 1.0.5
 ## SavedVariables: AllforOneDB
 ## SavedVariablesPerCharacter: AllforOneCharDB
 ## IconTexture: Interface\AddOns\AllforOne\media\icon-allforone.png
@@ -23,6 +23,7 @@ Core.lua
 
 # Data
 Data\MailRewardNPCs.lua
+Data\ShameMessages.lua
 
 # UI Components
 interfaces\UIComponents.lua

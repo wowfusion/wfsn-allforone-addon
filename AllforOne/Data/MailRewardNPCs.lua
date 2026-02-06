@@ -55,13 +55,53 @@ BR.MailRewardNPCs = {
         note = "Ethereal vendor for upgrade items and tokens"
     },
     
-    -- Weitere NPCs hier hinzufügen:
-    -- [NPC_ID] = {
-    --     name = "NPC Name (English)",
-    --     names = {"english name", "german name", "other variants"},
-    --     zone = "Zone Name",
-    --     note = "Beschreibung warum dieser NPC hier ist"
-    -- },
+    -- Classic / Felwood
+    [10920] = {
+        name = "Kelek Skykeeper",
+        names = {"kelek skykeeper", "kelek himmelshüter"},
+        zone = "Felwood",
+        note = "Quest reward mail sender"
+    },
+    
+    -- Dragonflight
+    [198505] = {
+        name = "Blue",
+        names = {"blue", "blau"},
+        zone = "Dragon Isles",
+        note = "Dragon whelpling, quest reward mail sender"
+    },
+    
+    -- Battle for Azeroth / Island Expeditions
+    [142065] = {
+        name = "Dana Pull",
+        names = {"dana pull"},
+        zone = "Boralus / Dazar'alor",
+        note = "Island Expedition reward mail sender"
+    },
+    
+    -- Warlords of Draenor
+    [79608] = {
+        name = "Yrel",
+        names = {"yrel"},
+        zone = "Shadowmoon Valley / Nagrand",
+        note = "Draenei Paladin, quest reward mail sender"
+    },
+    
+    -- Wrath of the Lich King / Argent Tournament
+    [33817] = {
+        name = "Justicar Mariel Trueheart",
+        names = {"justicar mariel trueheart", "justiziarin mariel treuherz"},
+        zone = "Icecrown / Argent Tournament",
+        note = "Argent Tournament quest reward mail sender"
+    },
+    
+    -- The War Within / Radiant Echoes
+    [205818] = {
+        name = "Initiate Oman",
+        names = {"initiate oman"},
+        zone = "Blasted Lands",
+        note = "Quest reward mail sender"
+    },
 }
 
 -- Helper function to check if an NPC is in the mail reward list

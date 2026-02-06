@@ -2,6 +2,17 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.5] - 2026-02-06
+
+### Behoben
+- **Kriegsmeutenbank Item-Anzeige**: Items werden jetzt korrekt einzeln mit Links aufgelistet (bis zu 4 verschiedene), statt fälschlicherweise als Zusammenfassung angezeigt zu werden
+- **Sicherheitscheck**: Logik wurde vereinfacht und durch ALT+F4 sowie Spiel verlassen wurde die Warnung fälschlicherweise getriggert.
+### Verbessert
+- **Mail-Whitelist erweitert**: Neue NPCs zur Whitelist hinzugefügt
+- **Scham-Nachrichten**: Spieler können jetzt individuell zwischen "Schande" und "Sensibel"-Nachrichten wählen (Einstellung in den lokalen Optionen)
+
+---
+
 ## [1.0.4] - 2026-02-04
 
 ### Behoben

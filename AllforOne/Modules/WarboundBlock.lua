@@ -82,7 +82,7 @@ local function CleanItemText(itemName, stackCount)
     return name
 end
 
--- Nachricht senden
+-- Nachricht senden (nutzt Data/ShameMessages.lua)
 local function SendShameMessage(action, details)
     if not BR:GetSetting("EnableShameMessages") then return end
     if not IsInGuild() then return end
@@ -91,22 +91,15 @@ local function SendShameMessage(action, details)
     if now - lastShameTime < SHAME_COOLDOWN then return end
     lastShameTime = now
     
-    local msg = ""
-    if action == "deposit_gold" then
-        msg = "Schande über mich! Ich habe " .. FormatGoldText(details) .. " in die Kriegsmeutenbank eingezahlt!"
-    elseif action == "withdraw_gold" then
-        msg = "Schande über mich! Ich habe " .. FormatGoldText(details) .. " aus der Kriegsmeutenbank entnommen!"
-    elseif action == "deposit_item" then
-        msg = "Schande über mich! Ich habe " .. (details or "ein Item") .. " in die Kriegsmeutenbank eingelagert!"
-    elseif action == "withdraw_item" then
-        msg = "Schande über mich! Ich habe " .. (details or "ein Item") .. " aus der Kriegsmeutenbank entnommen!"
-    elseif action == "deposit_all" then
-        msg = "Schande über mich! Ich habe Items in die Kriegsmeutenbank eingelagert!"
-    elseif action == "currency_transfer" then
-        msg = "Schande über mich! Ich habe " .. (details or "Währung") .. " an einen anderen Charakter überwiesen!"
+    -- Gold-Aktionen: Details in lesbaren Text umwandeln
+    local formattedDetails = details
+    if (action == "deposit_gold" or action == "withdraw_gold") and type(details) == "number" then
+        formattedDetails = FormatGoldText(details)
     end
     
-    if msg == "" then return end
+    -- Nachricht aus Data laden (Schande oder Sensibel je nach Spieler-Setting)
+    local msg = BR:GetShameMessage(action, formattedDetails)
+    if not msg then return end
     
     -- C_Timer.After(0) um aus tainted Kontext zu entkommen
     C_Timer.After(0, function()
@@ -129,6 +122,7 @@ local pendingAdded = {}
 local pendingRemoved = {}
 local batchTimer = nil
 local BATCH_DELAY = 1.5 -- Sekunden warten bevor Nachricht gesendet wird
+local MAX_INDIVIDUAL_ITEMS = 4 -- Ab dieser Anzahl verschiedener Items → Zusammenfassung
 
 -- Forward declaration
 local ProcessBatchedItems
@@ -257,45 +251,49 @@ local function DetectChanges()
     SnapshotAccountBank()
 end
 
+-- Erstellt die Item-Liste oder entscheidet ob zusammengefasst wird
+-- WoW Item-Links werden intern als Token behandelt und zählen nicht
+-- zur vollen Byte-Länge im Chat. Daher nur Anzahl als Kriterium.
+local function BuildItemMessage(items, actionSingle, actionBatch)
+    local itemCount = #items
+    
+    -- Bei mehr als MAX_INDIVIDUAL_ITEMS zusammenfassen
+    if itemCount > MAX_INDIVIDUAL_ITEMS then
+        SendShameMessage(actionBatch, itemCount)
+        BR:Debug("WarboundBlock: Batch-Zusammenfassung: " .. itemCount .. " Items")
+        return
+    end
+    
+    -- Einzelne Item-Texte erstellen und verlinkt auflisten
+    local itemTexts = {}
+    for _, item in ipairs(items) do
+        local text = item.link ~= "" and item.link or item.name
+        if item.count > 1 then
+            text = text .. " x" .. item.count
+        end
+        table.insert(itemTexts, text)
+    end
+    
+    local combinedText = table.concat(itemTexts, ", ")
+    SendShameMessage(actionSingle, combinedText)
+    BR:Debug("WarboundBlock: Einzelauflistung: " .. #itemTexts .. " Items")
+end
+
 -- Batch-Verarbeitung: Alle gesammelten Items zusammenfassen
 ProcessBatchedItems = function()
     batchTimer = nil
     
     -- Eingelagerte Items verarbeiten
     if #pendingAdded > 0 then
-        local itemTexts = {}
-        for _, item in ipairs(pendingAdded) do
-            local text = item.link ~= "" and item.link or item.name
-            if item.count > 1 then
-                text = text .. " x" .. item.count
-            end
-            table.insert(itemTexts, text)
-        end
-        
-        local combinedText = table.concat(itemTexts, ", ")
-        SendShameMessage("deposit_item", combinedText)
+        BuildItemMessage(pendingAdded, "deposit_item", "deposit_item_batch")
         NotifyBlocked("deposit_item")
-        
-        BR:Debug("WarboundBlock: Batch deposit: " .. #pendingAdded .. " Items")
         wipe(pendingAdded)
     end
     
     -- Entnommene Items verarbeiten
     if #pendingRemoved > 0 then
-        local itemTexts = {}
-        for _, item in ipairs(pendingRemoved) do
-            local text = item.link ~= "" and item.link or item.name
-            if item.count > 1 then
-                text = text .. " x" .. item.count
-            end
-            table.insert(itemTexts, text)
-        end
-        
-        local combinedText = table.concat(itemTexts, ", ")
-        SendShameMessage("withdraw_item", combinedText)
+        BuildItemMessage(pendingRemoved, "withdraw_item", "withdraw_item_batch")
         NotifyBlocked("withdraw_item")
-        
-        BR:Debug("WarboundBlock: Batch withdraw: " .. #pendingRemoved .. " Items")
         wipe(pendingRemoved)
     end
 end
