@@ -582,7 +582,12 @@ function BR:BroadcastStatus()
     
     local status = self:GetSetting("Enabled") and "ENABLED" or "DISABLED"
     local playerName = UnitName("player")
-    local msg = string.format("STATUS:%s:%s:%s", playerName, status, self.Version)
+    
+    -- Auktionsstatistiken mitsenden (ID 329 = Erstellte Auktionen, ID 330 = Auktionserwerbungen)
+    local auctionsPosted = GetStatistic and GetStatistic(329) or "--"
+    local auctionsBought = GetStatistic and GetStatistic(330) or "--"
+    
+    local msg = string.format("STATUS:%s:%s:%s:%s:%s", playerName, status, self.Version, auctionsPosted or "--", auctionsBought or "--")
     self:SendAddonMessage(msg, "GUILD")
     
     -- Also update own entry immediately (we don't receive our own messages)
@@ -595,7 +600,9 @@ function BR:BroadcastStatus()
         version = self.Version,
         lastSeen = time(),
         sender = playerName,
-        displayName = playerName
+        displayName = playerName,
+        auctionsPosted = auctionsPosted,
+        auctionsBought = auctionsBought,
     }
     
     self:Debug("Status broadcasted: " .. status)
@@ -736,11 +743,13 @@ end
 function BR:HandleAddonMessage(prefix, message, channel, sender)
     if prefix ~= COMM_PREFIX then return end
     
-    local msgType, data1, data2, data3 = strsplit(":", message)
+    local msgType, data1, data2, data3, data4, data5 = strsplit(":", message)
     
     if msgType == "STATUS" then
         -- Store user status for admin panel
         local playerName, status, version = data1, data2, data3
+        local auctionsPosted = data4 or "--"
+        local auctionsBought = data5 or "--"
         if not AllforOneDB.AddonUsers then
             AllforOneDB.AddonUsers = {}
         end
@@ -756,7 +765,9 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
             version = version,
             lastSeen = time(),
             sender = sender,
-            displayName = playerName
+            displayName = playerName,
+            auctionsPosted = auctionsPosted,
+            auctionsBought = auctionsBought,
         }
         
         -- Remove from pending responses if we're tracking

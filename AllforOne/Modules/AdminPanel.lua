@@ -238,7 +238,7 @@ function AdminPanel:ShowCharacterDetails(member, info, hasAddon, isEnabled)
     -- Create or reuse detail frame
     if not self.detailFrame then
         local frame = CreateFrame("Frame", "AllforOneCharacterDetail", UIParent, "BackdropTemplate")
-        frame:SetSize(320, 380)
+        frame:SetSize(320, 430)
         frame:SetPoint("CENTER", 200, 0)
         frame:SetMovable(true)
         frame:EnableMouse(true)
@@ -335,6 +335,22 @@ function AdminPanel:ShowCharacterDetails(member, info, hasAddon, isEnabled)
     else
         addonStatusText:SetText("|cFF888888Kein Addon|r")
     end
+    yOffset = yOffset - 20
+    
+    -- Auktionsstatistiken (aus STATUS-Sync)
+    local auctionTitle = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    auctionTitle:SetPoint("TOPLEFT", 0, yOffset)
+    auctionTitle:SetText(BR.Colors.White .. "Auktionshaus:|r")
+    yOffset = yOffset - 18
+    
+    local auctionText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    auctionText:SetPoint("TOPLEFT", 5, yOffset)
+    auctionText:SetWidth(280)
+    auctionText:SetJustifyH("LEFT")
+    
+    local aPosted = (info and info.auctionsPosted and info.auctionsPosted ~= "--") and info.auctionsPosted or "-"
+    local aBought = (info and info.auctionsBought and info.auctionsBought ~= "--") and info.auctionsBought or "-"
+    auctionText:SetText("Erstellte Auktionen: |cFFFFFFFF" .. aPosted .. "|r\nAuktionserwerbungen: |cFFFFFFFF" .. aBought .. "|r")
     yOffset = yOffset - 35
     
     -- Reset Warning button for officers (gold-styled)
