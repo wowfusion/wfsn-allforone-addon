@@ -1,9 +1,9 @@
-## Interface: 110207, 120000
+## Interface: 120000, 120001
 ## Title: All for One
 ## Notes: Guildfound Addon für WoW Retail - wowfusion.de
 ## Notes-deDE: Guildfound Addon für WoW Retail - wowfusion.de
 ## Author: wowfusion.de
-## Version: 1.0.5
+## Version: 1.0.6
 ## SavedVariables: AllforOneDB
 ## SavedVariablesPerCharacter: AllforOneCharDB
 ## IconTexture: Interface\AddOns\AllforOne\media\icon-allforone.png

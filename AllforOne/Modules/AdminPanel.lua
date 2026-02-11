@@ -238,7 +238,7 @@ function AdminPanel:ShowCharacterDetails(member, info, hasAddon, isEnabled)
     -- Create or reuse detail frame
     if not self.detailFrame then
         local frame = CreateFrame("Frame", "AllforOneCharacterDetail", UIParent, "BackdropTemplate")
-        frame:SetSize(320, 430)
+        frame:SetSize(320, 480)
         frame:SetPoint("CENTER", 200, 0)
         frame:SetMovable(true)
         frame:EnableMouse(true)
@@ -352,6 +352,29 @@ function AdminPanel:ShowCharacterDetails(member, info, hasAddon, isEnabled)
     local aBought = (info and info.auctionsBought and info.auctionsBought ~= "--") and info.auctionsBought or "-"
     auctionText:SetText("Erstellte Auktionen: |cFFFFFFFF" .. aPosted .. "|r\nAuktionserwerbungen: |cFFFFFFFF" .. aBought .. "|r")
     yOffset = yOffset - 35
+    
+    -- Goldstand anzeigen
+    local goldTitle = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    goldTitle:SetPoint("TOPLEFT", 0, yOffset)
+    goldTitle:SetText(BR.Colors.White .. "Vermögen:|r")
+    yOffset = yOffset - 18
+    
+    local goldText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    goldText:SetPoint("TOPLEFT", 5, yOffset)
+    goldText:SetWidth(280)
+    goldText:SetJustifyH("LEFT")
+    
+    if info and info.gold and info.gold > 0 then
+        local gold = math.floor(info.gold / 10000)
+        local silver = math.floor((info.gold % 10000) / 100)
+        local copper = info.gold % 100
+        goldText:SetText("Goldstand: |cFFFFD700" .. gold .. "|r|TInterface\\MoneyFrame\\UI-GoldIcon:0|t " .. 
+            "|cFFC0C0C0" .. silver .. "|r|TInterface\\MoneyFrame\\UI-SilverIcon:0|t " .. 
+            "|cFFB87333" .. copper .. "|r|TInterface\\MoneyFrame\\UI-CopperIcon:0|t")
+    else
+        goldText:SetText("Goldstand: |cFF888888-|r")
+    end
+    yOffset = yOffset - 20
     
     -- Reset Warning button for officers (gold-styled)
     local resetBtn = CreateGoldButton(content, 220, 26, "Warnung zurücksetzen")

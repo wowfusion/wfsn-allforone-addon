@@ -586,8 +586,9 @@ function BR:BroadcastStatus()
     -- Auktionsstatistiken mitsenden (ID 329 = Erstellte Auktionen, ID 330 = Auktionserwerbungen)
     local auctionsPosted = GetStatistic and GetStatistic(329) or "--"
     local auctionsBought = GetStatistic and GetStatistic(330) or "--"
+    local currentGold = GetMoney and GetMoney() or 0
     
-    local msg = string.format("STATUS:%s:%s:%s:%s:%s", playerName, status, self.Version, auctionsPosted or "--", auctionsBought or "--")
+    local msg = string.format("STATUS:%s:%s:%s:%s:%s:%d", playerName, status, self.Version, auctionsPosted or "--", auctionsBought or "--", currentGold)
     self:SendAddonMessage(msg, "GUILD")
     
     -- Also update own entry immediately (we don't receive our own messages)
@@ -603,6 +604,7 @@ function BR:BroadcastStatus()
         displayName = playerName,
         auctionsPosted = auctionsPosted,
         auctionsBought = auctionsBought,
+        gold = currentGold,
     }
     
     self:Debug("Status broadcasted: " .. status)
@@ -743,13 +745,14 @@ end
 function BR:HandleAddonMessage(prefix, message, channel, sender)
     if prefix ~= COMM_PREFIX then return end
     
-    local msgType, data1, data2, data3, data4, data5 = strsplit(":", message)
+    local msgType, data1, data2, data3, data4, data5, data6 = strsplit(":", message)
     
     if msgType == "STATUS" then
         -- Store user status for admin panel
         local playerName, status, version = data1, data2, data3
         local auctionsPosted = data4 or "--"
         local auctionsBought = data5 or "--"
+        local gold = tonumber(data6) or 0
         if not AllforOneDB.AddonUsers then
             AllforOneDB.AddonUsers = {}
         end
@@ -768,6 +771,7 @@ function BR:HandleAddonMessage(prefix, message, channel, sender)
             displayName = playerName,
             auctionsPosted = auctionsPosted,
             auctionsBought = auctionsBought,
+            gold = gold,
         }
         
         -- Remove from pending responses if we're tracking

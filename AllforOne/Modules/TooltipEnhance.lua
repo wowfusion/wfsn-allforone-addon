@@ -279,8 +279,9 @@ function TooltipEnhance:HookCommunitiesFrame()
             if frame and not frame.brHooked then
                 frame.brHooked = true
                 frame:HookScript("OnEnter", function(btn)
-                    if btn.memberInfo and btn.memberInfo.name then
-                        local name = btn.memberInfo.name
+                    local ok, memberInfo = pcall(function() return btn.memberInfo end)
+                    if ok and memberInfo and memberInfo.name then
+                        local name = memberInfo.name
                         local shortName = strsplit("-", name)
                         TooltipEnhance.lastGuildMember = shortName
                         

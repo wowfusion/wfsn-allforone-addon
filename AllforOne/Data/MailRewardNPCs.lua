@@ -102,6 +102,14 @@ BR.MailRewardNPCs = {
         zone = "Blasted Lands",
         note = "Quest reward mail sender"
     },
+    
+    -- The War Within / Reno Jackson
+    [226250] = {
+        name = "Reno Jackson",
+        names = {"reno jackson"},
+        zone = "Dornogal / Khaz Algar",
+        note = "Quest reward mail sender"
+    },
 }
 
 -- Helper function to check if an NPC is in the mail reward list

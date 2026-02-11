@@ -2,6 +2,19 @@
 
 Alle Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
 
+## [1.0.6] - 2026-02-11
+
+### Behoben
+- **Tooltip-Fehler behoben**: Lua-Fehler in der Gilden-Mitgliederliste (Communities Frame) durch geschützte Blizzard-Werte wurde behoben
+
+### Neu
+- **Offizier-Übersicht erweitert**
+
+### Verbessert
+- **Mail-Whitelist erweitert**: Reno Jackson zur Whitelist hinzugefügt
+
+---
+
 ## [1.0.5] - 2026-02-06
 
 ### Behoben
